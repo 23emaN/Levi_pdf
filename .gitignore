@@ -8,6 +8,7 @@
 # Uploaded PDFs and temporary files
 /myfile/*
 !/myfile/.gitkeep
+/upload/*
 /scratch/
 /date_edit/upload here/*
 !/date_edit/upload here/.gitkeep

@@ -101,8 +101,8 @@ mkdir($upload . '/sub');
 copy($sample, $upload . '/sub/a.pdf');
 $res = api('extract_job_batch', ['job_id' => $job['id'], 'files' => json_encode([['filename' => 'a.pdf', 'rel_path' => 'sub/a.pdf']])]);
 $finished = $jm->getJobFinishedDir($job);
-check('extraction moves the PDF from upload here to finished', is_file($finished . '/a.pdf') && !is_file($upload . '/sub/a.pdf'));
-check('extraction removes the emptied subfolder', !is_dir($upload . '/sub'));
+check('extraction copies the PDF from upload/<Job>/invoice/pdf to finished and leaves the original where it was', is_file($finished . '/a.pdf') && is_file($upload . '/sub/a.pdf'));
+check('extraction leaves the subfolders of upload/<Job>/invoice/pdf alone', is_dir($upload . '/sub'));
 check('extraction records the rows', ($res['items_count'] ?? 0) === 30, 'items=' . ($res['items_count'] ?? '?'));
 
 $job = $jm->createJob('Traversal');
@@ -115,7 +115,7 @@ $job = $jm->createJob('Clear keeps uploads');
 $upload = $jm->getJobUploadDir($job);
 copy($sample, $upload . '/pending.pdf');
 $jm->clearJobData($job['id']);
-check('clearJobData keeps files still waiting in upload here', is_file($upload . '/pending.pdf'));
+check('clearJobData keeps the files of upload/<Job>/invoice/pdf', is_file($upload . '/pending.pdf'));
 
 $job = $jm->createJob('Clear empty');
 $jm->clearJobData($job['id']);
@@ -1932,15 +1932,17 @@ copy($sample, $legacyDir . '/upload here/sub/multi.pdf');
 copy($second, $legacyDir . '/upload here/second.pdf');
 file_put_contents($legacyDir . '/credit note/upload here/cn.pdf', 'credit note bytes');
 file_put_contents($legacyDir . '/finished/open elsewhere.txt', 'held open');
+$legacyWork = $root . '/upload/Made before the split';
 $windows = DIRECTORY_SEPARATOR === '\\';
 $handle = $windows ? fopen($legacyDir . '/finished/open elsewhere.txt', 'r') : null;
 $extracted = api('extract_job_batch', ['job_id' => $legacyId, 'files' => json_encode([['filename' => 'multi.pdf', 'rel_path' => 'sub/multi.pdf'], ['filename' => 'second.pdf', 'rel_path' => 'second.pdf']])]);
 if ($windows) {
     check(
-        'while the old finished folder of a Job made before the split cannot be moved (a file inside is open), extraction still reads upload here from TAX INVOICE and puts the PDFs in that old folder',
+        'while the old finished folder of a Job made before the split cannot be moved (a file inside is open), extraction still reads the waiting PDFs from upload/<Job>/invoice/pdf, where the first request moved them, and copies them into that old folder',
         ($extracted['status'] ?? '') === 'success' && ($extracted['processed_files'] ?? 0) === 2 && is_file($legacyDir . '/finished/multi.pdf')
             && is_file($legacyDir . '/finished/second.pdf') && !is_dir($legacyDir . '/TAX INVOICE/finished') && !is_dir($legacyDir . '/upload here')
-            && FileManager::getPdfFiles($legacyDir . '/TAX INVOICE/upload here') === [] && is_file($legacyDir . '/CREDIT NOTE/upload here/cn.pdf'),
+            && is_file($legacyWork . '/invoice/pdf/sub/multi.pdf') && is_file($legacyWork . '/invoice/pdf/second.pdf')
+            && !is_dir($legacyDir . '/TAX INVOICE/upload here') && is_file($legacyWork . '/cn/pdf/cn.pdf'),
         json_encode([$extracted['status'] ?? $extracted, $extracted['processed_files'] ?? null, array_values(array_diff(scandir($legacyDir), ['.', '..']))], JSON_UNESCAPED_UNICODE)
     );
     fclose($handle);
@@ -2005,12 +2007,12 @@ check(
 );
 api('clear_job', ['job_id' => $legacyId]);
 check(
-    'clear_job on the moved Job deletes the processed PDFs of TAX INVOICE/finished and keeps CREDIT NOTE and the printed round',
-    FileManager::getPdfFiles($tiDir . '/finished') === [] && is_file($legacyDir . '/CREDIT NOTE/upload here/cn.pdf') && count($roundFiles) === 3
+    'clear_job on the moved Job deletes the processed PDFs of TAX INVOICE/finished and keeps upload/<Job>/ and the printed round',
+    FileManager::getPdfFiles($tiDir . '/finished') === [] && is_file($legacyWork . '/cn/pdf/cn.pdf') && is_file($legacyWork . '/invoice/pdf/second.pdf') && count($roundFiles) === 3
         && is_file($tiDir . '/print/print ครั้งที่ 1/10166/1_93247359-1.pdf')
 );
 api('delete_job', ['job_id' => $legacyId, 'confirm_name' => 'Made before the split']);
-check('deleting the moved Job removes its whole folder', !is_dir($legacyDir) && $jm->getJob($legacyId) === null);
+check('deleting the moved Job removes its whole folder in myfile/ and keeps upload/<Job>/', !is_dir($legacyDir) && $jm->getJob($legacyId) === null && is_file($legacyWork . '/invoice/pdf/sub/multi.pdf'));
 
 echo $failures ? "\n$failures FAILED\n" : "\nALL PASS\n";
 exit($failures ? 1 : 0);

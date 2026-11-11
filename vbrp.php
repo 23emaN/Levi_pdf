@@ -34,8 +34,8 @@ if (!$jobManager->jobFolderExists($job)) {
 
 $vbrpCounts = $jobManager->vbrpCounts($jobId);
 $vbrpFiles = $jobManager->getVbrpFiles($jobId);
-$vbrpUploadDir = $jobManager->getJobVbrpUploadDir($job);
-$vbrpUploadCount = count(FileManager::getFilesWithExtension($vbrpUploadDir, VbrpStore::EXTENSIONS));
+$vbrpUploadCount = $jobManager->waitingCount($jobId, 'vbrp');
+$vbrpUploadFolderText = JobFolders::displayPath($jobManager->getJobVbrpUploadDir($job)) . '/';
 $vbrpFinishedText = JobFolders::displayPath($jobManager->getJobVbrpFinishedDir($job)) . '/';
 $vbrpExcelColumns = implode(' / ', array_keys(VbrpStore::COLUMNS));
 
@@ -151,9 +151,9 @@ function renderVbrpFinishedMenu(array $files, int $totalRows): string
             <span class="header-title">
                 <i class="fa-solid fa-folder text-warning me-1"></i> <?= htmlspecialchars($job['name']) ?>
             </span>
-            <span class="header-file-pill folder-link" title="คลิกเพื่อเปิดโฟลเดอร์ VBRP/upload here ใน Explorer" onclick="openJobFolder('vbrp_upload')">
+            <span class="header-file-pill folder-link" title="คลิกเพื่อเปิดโฟลเดอร์ <?= htmlspecialchars($vbrpUploadFolderText) ?> ใน Explorer (นับเฉพาะไฟล์ที่ยังไม่ได้ดึงข้อมูล)" onclick="openJobFolder('vbrp_upload')">
                 <i class="fa-regular fa-folder-open me-1 text-primary"></i>
-                upload here/ (<strong id="vbrp-upload-count" class="tabular-num text-dark"><?= number_format($vbrpUploadCount) ?></strong> ไฟล์)
+                invoice/vbrp/ (ใหม่ <strong id="vbrp-upload-count" class="tabular-num text-dark"><?= number_format($vbrpUploadCount) ?></strong> ไฟล์)
             </span>
         </div>
 
@@ -177,13 +177,13 @@ function renderVbrpFinishedMenu(array $files, int $totalRows): string
         <div class="app-toolbar toolbar-stacked">
             <div class="toolbar-row">
                 <button class="btn btn-sm px-3 btn-tb btn-tb-accent btn-step-extract" id="vbrp-start" type="button">
-                    <i class="fa-solid fa-play me-1"></i> ดึงข้อมูลจาก upload here
+                    <i class="fa-solid fa-play me-1"></i> ดึงข้อมูลจากโฟลเดอร์ invoice/vbrp
                 </button>
                 <button class="btn btn-outline-danger btn-sm" id="vbrp-stop" type="button" style="display: none;">
                     <i class="fa-solid fa-stop me-1"></i> หยุด
                 </button>
-                <button class="btn btn-sm btn-tb" id="vbrp-open-upload" type="button" onclick="openJobFolder('vbrp_upload')" title="เปิดโฟลเดอร์ VBRP/upload here ใน Explorer">
-                    <i class="fa-regular fa-folder-open me-1"></i> upload here
+                <button class="btn btn-sm btn-tb" id="vbrp-open-upload" type="button" onclick="openJobFolder('vbrp_upload')" title="เปิดโฟลเดอร์ <?= htmlspecialchars($vbrpUploadFolderText) ?> ใน Explorer">
+                    <i class="fa-regular fa-folder-open me-1"></i> invoice/vbrp
                 </button>
                 <div class="dropdown d-inline-block" id="vbrp-finished-dropdown">
                     <button class="btn btn-sm btn-tb dropdown-toggle" id="vbrp-open-finished" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="ดูรายการไฟล์ที่อัปโหลดผ่านแล้วใน VBRP/finished">
@@ -290,7 +290,7 @@ function renderVbrpFinishedMenu(array $files, int $totalRows): string
                 </div>
                 <div class="fix-note">
                     <i class="fa-solid fa-circle-info text-primary"></i>
-                    <span>ไฟล์ Excel ไม่ถูกลบ ยังอยู่ในโฟลเดอร์ VBRP/finished ถ้าต้องการดึงข้อมูลใหม่ ให้ย้ายไฟล์กลับไปที่ VBRP/upload here แล้วกดดึงข้อมูลอีกครั้ง</span>
+                    <span>ไฟล์ Excel ไม่ถูกลบ ไฟล์ต้นฉบับยังอยู่ในโฟลเดอร์ <?= htmlspecialchars($vbrpUploadFolderText) ?> ถ้าต้องการดึงข้อมูลใหม่ กดดึงข้อมูลอีกครั้ง</span>
                 </div>
             </div>
             <div class="modal-footer border-top py-2 px-3 bg-light d-flex align-items-center justify-content-end gap-2">

@@ -306,8 +306,9 @@ check(
         && preg_match('/<th data-col="store_no" data-type="string" class="sorted"[^>]*>Dest Store No\. <i class="fa-solid fa-sort-up sort-icon"><\/i><\/th>/', $cnPage) === 1
 );
 $toolbar = [
-    'credit-note-start' => 'ดึงข้อมูลจาก upload here',
-    'credit-note-open-upload' => 'upload here',
+    'credit-note-start' => 'ดึงข้อมูลจากโฟลเดอร์ cn/pdf',
+    'credit-note-open-upload' => 'cn/pdf',
+    'credit-note-asn-folder' => 'อ่านจากโฟลเดอร์ asn',
     'credit-note-open-finished' => 'finished',
     'credit-note-export' => 'Excel (.xlsx)',
     'credit-note-clear' => 'ล้างข้อมูลใบลดหนี้',
@@ -373,9 +374,9 @@ check(
     preg_match('/<div class="dashboard-notice cn-reread-notice d-none" id="credit-note-reread-notice">.*?<span class="tabular-num" id="credit-note-reread-folder">' . preg_quote($finishedText, '/') . '<\/span>.*?id="credit-note-reread">\s*<i[^>]*><\/i> ดึงข้อมูลใหม่จาก finished/s', $cnPage) === 1
 );
 check(
-    'the clear dialog says the PDFs stay in finished and how to read them again',
-    strpos($cnPage, 'ไฟล์ PDF ไม่ถูกลบ ยังอยู่ในโฟลเดอร์ CREDIT NOTE/finished') !== false
-        && strpos($cnPage, 'ให้ย้ายไฟล์กลับไปที่ CREDIT NOTE/upload here') !== false
+    'the clear dialog says the PDFs are not deleted, the originals stay in upload/<Job>/cn/pdf, and how to read them again',
+    strpos($cnPage, 'ไฟล์ PDF ไม่ถูกลบ ไฟล์ต้นฉบับยังอยู่ในโฟลเดอร์ upload/Portal _A&amp;B/cn/pdf/') !== false
+        && strpos($cnPage, 'ถ้าต้องการดึงข้อมูลใหม่ กดดึงข้อมูลอีกครั้ง') !== false
 );
 check(
     'the status bar of each system names its own folder, myfile/<Job>/TAX INVOICE/ on workspace.php and myfile/<Job>/CREDIT NOTE/ on credit_note.php, and opens it',
@@ -456,8 +457,8 @@ if ($index === null) {
         json_encode([$index['serverLines'] ?? null, $index['withCreditNotes'] ?? null], JSON_UNESCAPED_UNICODE)
     );
     check(
-        'the delete dialog names TAX INVOICE/upload here for the PDFs still waiting there',
-        in_array('ไฟล์ PDF ที่ยังรอดึงข้อมูลในโฟลเดอร์ TAX INVOICE/upload here 4 ไฟล์', $index['withCreditNotes'] ?? [], true),
+        'the delete dialog names upload/.../invoice/pdf for the PDFs not read yet, and says they are not deleted',
+        in_array('ไฟล์ PDF ที่ยังไม่ได้ดึงข้อมูลในโฟลเดอร์ upload/.../invoice/pdf 4 ไฟล์ (ไม่ถูกลบ)', $index['withCreditNotes'] ?? [], true),
         json_encode($index['withCreditNotes'] ?? null, JSON_UNESCAPED_UNICODE)
     );
 }

@@ -129,6 +129,18 @@ class AsnStore
         return $stmt->fetchAll();
     }
 
+    /**
+     * The source labels of the Job's ASN rows ("{file name} [{sheet}]"), in import order
+     *
+     * @return string[]
+     */
+    public function sourceFiles(int $jobId): array
+    {
+        $stmt = $this->db->prepare("SELECT source_file FROM job_asn_records WHERE job_id = :job_id AND source_file IS NOT NULL AND source_file != '' GROUP BY source_file ORDER BY MIN(id) ASC");
+        $stmt->execute([':job_id' => $jobId]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
     public function refreshAsnMetadata(int $jobId): ?string
     {
         $stmt = $this->db->prepare("

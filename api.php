@@ -320,22 +320,8 @@ try {
                 }
                 $requestFiles[$baseName] = true;
 
-                // 2. Move file from upload here -> finished (moving, not copying)
-                $destPath = $finishedDir . DIRECTORY_SEPARATOR . $baseName;
-                if (realpath($srcPath) !== realpath($destPath)) {
-                    if (file_exists($destPath)) {
-                        @unlink($destPath);
-                    }
-                    if (!@rename($srcPath, $destPath)) {
-                        if (@copy($srcPath, $destPath)) {
-                            @unlink($srcPath);
-                        }
-                    }
-                    // Clean up empty parent subfolder inside upload here if file came from a subfolder
-                    FileManager::pruneEmptyParents($srcPath, $uploadDir);
-                }
-
-                $storedPath = file_exists($destPath) ? $destPath : $srcPath;
+                // 2. Copy the file into finished; the original stays in upload/{Job}/invoice/pdf
+                $storedPath = FileManager::copyInto($srcPath, $finishedDir);
 
                 $batchEntries[] = [
                     'filename' => $baseName,
@@ -344,9 +330,6 @@ try {
                 ];
                 $processedCount++;
             }
-
-            // Clean up any remaining empty subdirectories inside upload here
-            FileManager::cleanEmptySubdirectories($uploadDir);
 
             if (!empty($batchEntries)) {
                 $extractedBatchRows = $jobManager->recordExtractedBatch($jobId, $batchEntries, $overwrite, array_keys($removeFilenames));
@@ -710,6 +693,29 @@ try {
             ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             break;
 
+        // The ASN pages read the Excel files of upload/{Job}/invoice/asn or upload/{Job}/cn/asn in the browser
+        case 'job_asn_folder':
+            $jobManager = new JobManager();
+            $side = ($_GET['side'] ?? '') === 'cn' ? 'cn' : 'invoice';
+            echo json_encode(['status' => 'success', 'data' => $jobManager->asnFolderFiles(intval($_GET['job_id'] ?? 0), $side)], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            break;
+
+        case 'job_asn_folder_file':
+            $jobManager = new JobManager();
+            $side = ($_GET['side'] ?? '') === 'cn' ? 'cn' : 'invoice';
+            $path = $jobManager->asnFolderFile(intval($_GET['job_id'] ?? 0), $side, (string)($_GET['rel_path'] ?? ''));
+            if ($path === null) {
+                http_response_code(404);
+                throw new Exception('ไม่พบไฟล์นี้ในโฟลเดอร์ asn');
+            }
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            header('Content-Type: application/octet-stream');
+            header('Content-Length: ' . filesize($path));
+            readfile($path);
+            exit;
+
         case 'open_folder':
             if (!FileManager::isSameMachine((string)($_SERVER['REMOTE_ADDR'] ?? ''), (string)($_SERVER['SERVER_ADDR'] ?? ''))) {
                 throw new Exception('เปิดโฟลเดอร์ได้เฉพาะเมื่อเปิดโปรแกรมบนเครื่องที่รันเซิร์ฟเวอร์นี้เท่านั้น');
@@ -732,9 +738,12 @@ try {
                     'round' => $jobManager->getJobPrintRoundDir($job, intval($_POST['round'] ?? 0)),
                     'cn' => $jobManager->getJobCreditNoteDir($job),
                     'cn_upload' => $jobManager->getJobCnUploadDir($job),
+                    'asn' => $jobManager->getJobAsnDir($job),
+                    'cn_asn' => $jobManager->getJobCnAsnDir($job),
+                    'work' => $jobManager->getJobWorkDir($job),
                     'cn_finished' => $jobManager->getJobCnFinishedDir($job),
                     'vbrp' => $jobManager->getJobVbrpDir($job, false),
-                    'vbrp_upload' => $jobManager->getJobVbrpUploadDir($job, false),
+                    'vbrp_upload' => $jobManager->getJobVbrpUploadDir($job),
                     'vbrp_finished' => $jobManager->getJobVbrpFinishedDir($job, false),
                     'cover' => $target === 'cover' ? $jobManager->getJobCoverDir($job) : '',
                 ];
@@ -812,8 +821,7 @@ try {
             $jobId = intval($_GET['job_id'] ?? 0);
             $jobManager = new JobManager();
             if ($jobId > 0 && ($job = $jobManager->getJob($jobId))) {
-                $uploadDir = $jobManager->getJobUploadDir($job, false);
-                $myfileCount = is_dir($uploadDir) ? count(FileManager::getPdfFiles($uploadDir)) : 0;
+                $myfileCount = $jobManager->waitingCount($jobId, 'pdf');
                 $invoices = [];
                 $cns = [];
             } else {

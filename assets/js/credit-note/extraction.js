@@ -30,7 +30,7 @@ function creditNoteSetPhase(phase) {
     start.disabled = view.start === 'busy';
     start.innerHTML = view.start === 'busy'
         ? '<span class="spinner-border spinner-border-sm me-1"></span> ตรวจสอบไฟล์...'
-        : '<i class="fa-solid fa-play me-1"></i> ดึงข้อมูลจาก upload here';
+        : '<i class="fa-solid fa-play me-1"></i> ดึงข้อมูลจากโฟลเดอร์ cn/pdf';
 
     stop.style.display = view.stop === 'hidden' ? 'none' : '';
     stop.disabled = view.stop === 'busy';
@@ -108,26 +108,26 @@ async function creditNoteStartExtraction() {
         scan = (await creditNoteApi('job_cn_scan')).data;
     } catch (err) {
         creditNoteSetPhase('idle');
-        creditNoteShowNotice({ tone: 'error', title: 'เกิดข้อผิดพลาด', message: 'ตรวจสอบไฟล์ใน upload here ไม่สำเร็จ: ' + err.message });
+        creditNoteShowNotice({ tone: 'error', title: 'เกิดข้อผิดพลาด', message: 'ตรวจสอบไฟล์ในโฟลเดอร์ cn/pdf ไม่สำเร็จ: ' + err.message });
         return;
     }
     creditNoteSetPhase('idle');
     creditNoteRun.scan = scan;
-    creditNoteSetUploadCount(scan.total_in_upload);
+    creditNoteSetUploadCount(scan.new_count);
 
     const everyFile = [...scan.new_files, ...scan.existing_files, ...scan.duplicate_files];
     if (scan.total_in_upload === 0) {
         creditNoteShowNotice({
             tone: 'warning',
-            title: 'ไม่พบไฟล์ PDF ใน upload here',
+            title: 'ไม่พบไฟล์ PDF ในโฟลเดอร์ cn/pdf',
             message: 'ยังไม่มีไฟล์ใบลดหนี้สำหรับดึงข้อมูล',
-            detailHtml: `<div class="cn-notice-note">วางไฟล์ PDF ใบลดหนี้ไว้ที่ <span class="tabular-num">${escapeHtml(scan.upload_dir)}</span> แล้วกด "ดึงข้อมูลจาก upload here" อีกครั้ง</div>`,
-            action: { label: '<i class="fa-regular fa-folder-open me-1"></i> เปิดโฟลเดอร์ upload here', onClick: () => openJobFolder('cn_upload') }
+            detailHtml: `<div class="cn-notice-note">วางไฟล์ PDF ใบลดหนี้ไว้ที่ <span class="tabular-num">${escapeHtml(scan.upload_dir)}</span> แล้วกด "ดึงข้อมูลจากโฟลเดอร์ cn/pdf" อีกครั้ง</div>`,
+            action: { label: '<i class="fa-regular fa-folder-open me-1"></i> เปิดโฟลเดอร์ cn/pdf', onClick: () => openJobFolder('cn_upload') }
         });
     } else if (scan.new_count === 0) {
         creditNoteShowNotice({
             tone: 'info',
-            title: 'ไม่มีไฟล์ใหม่ใน upload here',
+            title: 'ไม่มีไฟล์ใหม่ในโฟลเดอร์ cn/pdf',
             message: scan.duplicate_count === 0
                 ? `ทั้ง ${scan.total_in_upload.toLocaleString()} ไฟล์เคยดึงข้อมูลเข้า Job นี้แล้ว`
                 : `ทั้ง ${scan.total_in_upload.toLocaleString()} ไฟล์เคยดึงข้อมูลแล้ว หรือมีเลขใบลดหนี้ซ้ำกับไฟล์อื่นใน Job นี้`,
@@ -162,7 +162,7 @@ async function creditNoteRunBatches(files, replace) {
     if (creditNoteRun.phase !== 'idle') return;
     const scan = creditNoteRun.scan;
     const result = await creditNoteExtractFiles(files.map(f => f.rel_path), replace);
-    creditNoteSetUploadCount(Math.max(0, scan.total_in_upload - result.processed));
+    creditNoteSetUploadCount(Math.max(0, scan.new_count - result.processed));
     creditNoteShowResult(result, replace ? [] : scan.existing_files, replace ? [] : scan.duplicate_files);
 }
 
@@ -236,8 +236,8 @@ function creditNoteRequestStop() {
     if (creditNoteRun.progress) creditNoteRun.progress();
 }
 
-// folder: where the files that were not read stay (upload here, or finished for a re-read)
-function creditNoteShowResult(result, leftExisting, leftDuplicates, folder = 'upload here') {
+// folder: where the files that were not read are (cn/pdf, or finished for a re-read)
+function creditNoteShowResult(result, leftExisting, leftDuplicates, folder = 'cn/pdf') {
     const skipped = [...leftDuplicates, ...result.skipped];
     const leftInUpload = skipped.length + leftExisting.length + result.notCreditNote.length;
     let message = `ดึงข้อมูล ${result.processed.toLocaleString()} ไฟล์ ได้ใบลดหนี้ ${result.documents.toLocaleString()} ใบ`;

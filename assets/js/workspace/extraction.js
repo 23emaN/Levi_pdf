@@ -94,9 +94,9 @@ document.getElementById('btn-start').addEventListener('click', async () => {
 
         if (scanResult.total_in_myfile === 0) {
             showNoticeModal(
-                'ไม่พบไฟล์ PDF ในโฟลเดอร์ upload here',
+                'ไม่พบไฟล์ PDF ในโฟลเดอร์ invoice/pdf',
                 'ยังไม่มีไฟล์งานสำหรับดึงข้อมูลในรอบนี้',
-                `กรุณานำไฟล์ PDF ที่ต้องการดึงข้อมูลไปวางไว้ใน:\n${scanResult.upload_dir || 'myfile/.../upload here'}\nแล้วกดปุ่ม "ดึงข้อมูลจาก upload here" อีกครั้ง`,
+                `กรุณานำไฟล์ PDF ที่ต้องการดึงข้อมูลไปวางไว้ใน:\n${scanResult.upload_dir || 'upload/.../invoice/pdf'}\nแล้วกดปุ่ม "ดึงข้อมูลจากโฟลเดอร์ invoice/pdf" อีกครั้ง`,
                 'warning'
             );
             return;
@@ -131,7 +131,7 @@ document.getElementById('btn-start').addEventListener('click', async () => {
         showNoticeModal('เกิดข้อผิดพลาด', 'เกิดข้อผิดพลาดในการตรวจสอบไฟล์', err.message, 'error');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-play me-1"></i> ดึงข้อมูลจาก upload here';
+        btn.innerHTML = '<i class="fa-solid fa-play me-1"></i> ดึงข้อมูลจากโฟลเดอร์ invoice/pdf';
     }
 });
 
@@ -248,7 +248,7 @@ async function startBatchExtraction(mode) {
             'ข้ามไฟล์ที่เลขบิลซ้ำ',
             `ไม่ได้ดึง ${leftDuplicates.length.toLocaleString()} ไฟล์ เพราะเลขบิลซ้ำกับไฟล์ที่ดึงไว้แล้ว`,
             leftDuplicates.slice(0, 8).map(f => `• ${f.filename} ซ้ำกับ ${f.duplicate_of}`).join('\n') +
-                (leftDuplicates.length > 8 ? '\n...' : '') + '\n\nไฟล์เหล่านี้ยังอยู่ใน upload here',
+                (leftDuplicates.length > 8 ? '\n...' : '') + '\n\nไฟล์เหล่านี้ไม่ถูกอ่าน',
             'warning'
         );
     }

@@ -39,7 +39,7 @@ class CreditNoteStore
     }
 
     /**
-     * Sorts the PDFs of the credit note "upload here" folder (subfolders included) into files whose name is already
+     * Sorts the PDFs of upload/{Job}/cn/pdf (subfolders included) into files whose name is already
      * recorded, files holding a credit note number that another file name holds, and new files
      */
     public function scan(int $jobId): array
@@ -47,7 +47,6 @@ class CreditNoteStore
         $job = $this->requireJob($jobId);
         $uploadDir = $this->folders->getJobCnUploadDir($job);
         $finishedDir = $this->folders->getJobCnFinishedDir($job);
-        FileManager::cleanEmptySubdirectories($uploadDir);
         $diskFiles = FileManager::getPdfFiles($uploadDir);
 
         $recorded = array_flip($this->recordedFilenames($jobId));
@@ -100,7 +99,7 @@ class CreditNoteStore
      * be read, or holds a credit note number another file name holds (unless $replaceDuplicates: then that file's
      * rows go). Every other file moves to "finished" and its documents replace the rows of its file name.
      *
-     * @param string[] $relPaths paths inside the credit note "upload here" folder, or file names in "finished"
+     * @param string[] $relPaths paths inside upload/{Job}/cn/pdf, or file names in "finished"
      */
     public function extractBatch(int $jobId, array $relPaths, bool $replaceDuplicates): array
     {
@@ -149,10 +148,9 @@ class CreditNoteStore
                 $owners[$no] = $baseName;
             }
             unset($replaced[$baseName]);
-            $entries[$baseName] = ['path' => $this->moveToFinished($srcPath, $uploadDir, $finishedDir), 'docs' => $docs];
+            $entries[$baseName] = ['path' => FileManager::copyInto($srcPath, $finishedDir), 'docs' => $docs];
         }
 
-        FileManager::cleanEmptySubdirectories($uploadDir);
         $inserted = $this->record($jobId, $entries, array_keys($replaced));
 
         return [
@@ -328,8 +326,8 @@ class CreditNoteStore
     }
 
     /**
-     * The file a request names, found the way the Tax Invoice flow finds it (the path inside "upload here", then the
-     * name in "upload here", then the name in "finished"); null unless it lies inside one of those two folders
+     * The file a request names, found the way the Tax Invoice flow finds it (the path inside upload/{Job}/cn/pdf, then the
+     * name there, then the name in "finished"); null unless it lies inside one of those two folders
      */
     private function locate(string $relPath, string $uploadDir, string $finishedDir): ?string
     {
@@ -351,26 +349,6 @@ class CreditNoteStore
         return null;
     }
 
-    /**
-     * Moves (not copies) a PDF into "finished" and removes the "upload here" subfolders it leaves empty
-     *
-     * @return string where the PDF is now
-     */
-    private function moveToFinished(string $srcPath, string $uploadDir, string $finishedDir): string
-    {
-        $destPath = $finishedDir . DIRECTORY_SEPARATOR . basename($srcPath);
-        if (realpath($srcPath) === realpath($destPath)) {
-            return $destPath;
-        }
-        if (file_exists($destPath)) {
-            @unlink($destPath);
-        }
-        if (!@rename($srcPath, $destPath) && @copy($srcPath, $destPath)) {
-            @unlink($srcPath);
-        }
-        FileManager::pruneEmptyParents($srcPath, $uploadDir);
-        return file_exists($destPath) ? $destPath : $srcPath;
-    }
 
     private function recordedFilenames(int $jobId): array
     {
@@ -459,6 +437,19 @@ class CreditNoteStore
         }
         $doc['has_items'] = $row['read_ok'] !== null;
         return $doc;
+    }
+
+    /**
+     * PDFs of upload/{Job}/cn/pdf whose name the Job has not read yet (read files stay in that folder)
+     */
+    public function waitingCount(int $jobId): int
+    {
+        $read = array_flip($this->recordedFilenames($jobId));
+        $count = 0;
+        foreach (FileManager::getPdfFiles($this->folders->getJobCnUploadDir($this->requireJob($jobId), false)) as $file) {
+            $count += isset($read[basename($file)]) ? 0 : 1;
+        }
+        return $count;
     }
 
     private function requireJob(int $jobId): array

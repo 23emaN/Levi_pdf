@@ -50,7 +50,6 @@ class PdfItemStore
         }
 
         $uploadDir = $this->folders->getJobUploadDir($job);
-        FileManager::cleanEmptySubdirectories($uploadDir);
         $diskFiles = FileManager::getPdfFiles($uploadDir);
 
         $stmt = $this->db->prepare("SELECT filename FROM job_files WHERE job_id = :job_id");
@@ -116,6 +115,21 @@ class PdfItemStore
             'upload_dir' => JobFolders::displayPath($uploadDir),
             'finished_dir' => JobFolders::displayPath($this->folders->getJobFinishedDir($job, false))
         ];
+    }
+
+    /**
+     * PDFs of upload/{Job}/invoice/pdf whose name the Job has not read yet (read files stay in that folder)
+     */
+    public function waitingCount(array $job): int
+    {
+        $stmt = $this->db->prepare("SELECT filename FROM job_files WHERE job_id = :job_id");
+        $stmt->execute([':job_id' => (int)$job['id']]);
+        $read = array_flip($stmt->fetchAll(PDO::FETCH_COLUMN));
+        $count = 0;
+        foreach (FileManager::getPdfFiles($this->folders->getJobUploadDir($job, false)) as $file) {
+            $count += isset($read[basename($file)]) ? 0 : 1;
+        }
+        return $count;
     }
 
     /**

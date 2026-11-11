@@ -110,7 +110,7 @@ function vbrpSetPhase(phase) {
     start.disabled = view.start === 'busy';
     start.innerHTML = view.start === 'busy'
         ? '<span class="spinner-border spinner-border-sm me-1"></span> ตรวจสอบไฟล์...'
-        : '<i class="fa-solid fa-play me-1"></i> ดึงข้อมูลจาก upload here';
+        : '<i class="fa-solid fa-play me-1"></i> ดึงข้อมูลจากโฟลเดอร์ invoice/vbrp';
 
     stop.style.display = view.stop === 'hidden' ? 'none' : '';
     stop.disabled = view.stop === 'busy';
@@ -133,20 +133,20 @@ async function vbrpStartExtraction() {
         scan = (await vbrpApi('job_vbrp_scan')).data;
     } catch (err) {
         vbrpSetPhase('idle');
-        vbrpShowNotice({ tone: 'error', title: 'เกิดข้อผิดพลาด', message: 'ตรวจสอบไฟล์ใน upload here ไม่สำเร็จ: ' + err.message });
+        vbrpShowNotice({ tone: 'error', title: 'เกิดข้อผิดพลาด', message: 'ตรวจสอบไฟล์ในโฟลเดอร์ invoice/vbrp ไม่สำเร็จ: ' + err.message });
         return;
     }
     vbrpSetPhase('idle');
     vbrpRun.scan = scan;
-    vbrpSetUploadCount(scan.total_in_upload);
+    vbrpSetUploadCount(scan.new_count);
 
     if (scan.total_in_upload === 0) {
         vbrpShowNotice({
             tone: 'warning',
-            title: 'ไม่พบไฟล์ Excel ใน upload here',
+            title: 'ไม่พบไฟล์ Excel ในโฟลเดอร์ invoice/vbrp',
             message: 'ยังไม่มีไฟล์ VBRP สำหรับดึงข้อมูล',
-            detailHtml: `<div class="cn-notice-note">วางไฟล์ Excel (.xlsx) ไว้ที่ <span class="tabular-num">${escapeHtml(scan.upload_dir)}</span> แล้วกด "ดึงข้อมูลจาก upload here" อีกครั้ง</div>`,
-            action: { label: '<i class="fa-regular fa-folder-open me-1"></i> เปิดโฟลเดอร์ upload here', onClick: () => openJobFolder('vbrp_upload') }
+            detailHtml: `<div class="cn-notice-note">วางไฟล์ Excel (.xlsx) ไว้ที่ <span class="tabular-num">${escapeHtml(scan.upload_dir)}</span> แล้วกด "ดึงข้อมูลจากโฟลเดอร์ invoice/vbrp" อีกครั้ง</div>`,
+            action: { label: '<i class="fa-regular fa-folder-open me-1"></i> เปิดโฟลเดอร์ invoice/vbrp', onClick: () => openJobFolder('vbrp_upload') }
         });
     } else {
         const files = [...(scan.new_files || []), ...(scan.existing_files || [])];
@@ -158,7 +158,7 @@ async function vbrpRunFiles(files, replace) {
     if (vbrpRun.phase !== 'idle') return;
     const scan = vbrpRun.scan;
     const result = await vbrpExtractFiles(files.map(f => f.rel_path), replace);
-    vbrpSetUploadCount(Math.max(0, scan.total_in_upload - result.processed));
+    vbrpSetUploadCount(Math.max(0, scan.new_count - result.processed));
     vbrpShowResult(result, replace ? [] : scan.existing_files);
 }
 
@@ -222,7 +222,7 @@ function vbrpRequestStop() {
     if (vbrpRun.progress) vbrpRun.progress();
 }
 
-// leftExisting: files of upload here that were not read because their name was read before
+// leftExisting: files of invoice/vbrp that were not read because their name was read before
 function vbrpShowResult(result, leftExisting) {
     const uniqueInvoices = Array.from(new Set(result.replacedInvoices || []));
     const uniqueReplacedFiles = Array.from(new Set(result.replaced || []));
@@ -232,7 +232,7 @@ function vbrpShowResult(result, leftExisting) {
     }
     if (result.stopped) message += ` หยุดก่อนครบ ยังไม่ได้อ่าน ${(result.total - result.done).toLocaleString()} ไฟล์`;
 
-    const stays = 'ไฟล์เหล่านี้ยังอยู่ใน upload here';
+    const stays = 'ไฟล์เหล่านี้ไม่ถูกอ่าน';
     const detailHtml = vbrpNoticeSection('fa-solid fa-arrows-rotate text-primary', 'เลข Invoice (คอลัมน์ C) ที่ลบข้อมูลเก่าและแทนที่ด้วยข้อมูลใหม่', uniqueInvoices.map(inv => `<span class="tabular-num">${escapeHtml(inv)}</span>`), '', 'เลข Invoice')
         + vbrpNoticeSection('fa-solid fa-file-Excel text-primary', 'ไฟล์เดิมที่ข้อมูลถูกแทนที่ทั้งหมด', uniqueReplacedFiles.map(name => escapeHtml(name)), '')
         + vbrpNoticeSection('fa-solid fa-file-circle-check text-warning', 'ข้ามเพราะเคยดึงข้อมูลแล้ว', leftExisting.map(f => escapeHtml(f.filename)), stays)
@@ -252,13 +252,13 @@ function vbrpShowResult(result, leftExisting) {
 
 // ---------------------------------------------------------------- upload
 
-// Sends the chosen Excel files to the upload here folder of the Job; reading them is the button's job, as on the other pages
+// Sends the chosen Excel files to upload/{Job}/invoice/vbrp; reading them is the button's job, as on the other pages
 async function vbrpUploadFiles(fileList) {
     const files = Array.from(fileList || []);
     if (files.length === 0) return;
     const zone = document.getElementById('vbrp-dropzone');
     zone.classList.add('is-busy');
-    showLoadingOverlay('กำลังอัปโหลดไฟล์ VBRP...', `ส่ง ${files.length.toLocaleString()} ไฟล์ไปที่ upload here`);
+    showLoadingOverlay('กำลังอัปโหลดไฟล์ VBRP...', `ส่ง ${files.length.toLocaleString()} ไฟล์ไปที่โฟลเดอร์ invoice/vbrp`);
     try {
         const fd = new FormData();
         fd.append('job_id', CURRENT_JOB_ID);
@@ -266,11 +266,11 @@ async function vbrpUploadFiles(fileList) {
         const json = await vbrpApi('job_vbrp_upload', fd);
         const scan = (await vbrpApi('job_vbrp_scan')).data;
         vbrpRun.scan = scan;
-        vbrpSetUploadCount(scan.total_in_upload);
+        vbrpSetUploadCount(scan.new_count);
         vbrpShowNotice({
             tone: json.rejected.length > 0 ? (json.saved.length > 0 ? 'warning' : 'error') : 'success',
             title: json.saved.length > 0 ? 'อัปโหลดไฟล์แล้ว' : 'อัปโหลดไม่สำเร็จ',
-            message: `เก็บไฟล์ ${json.saved.length.toLocaleString()} ไฟล์ไว้ใน upload here${json.saved.length > 0 ? ' กด "ดึงข้อมูลจาก upload here" เพื่ออ่านข้อมูล' : ''}`,
+            message: `เก็บไฟล์ ${json.saved.length.toLocaleString()} ไฟล์ไว้ในโฟลเดอร์ invoice/vbrp${json.saved.length > 0 ? ' กด "ดึงข้อมูลจากโฟลเดอร์ invoice/vbrp" เพื่ออ่านข้อมูล' : ''}`,
             detailHtml: vbrpNoticeSection('fa-solid fa-circle-exclamation text-danger', 'อัปโหลดไม่ได้', json.rejected.map(f => `${escapeHtml(f.filename)} <span class="text-muted">${escapeHtml(f.message)}</span>`), ''),
             action: json.saved.length > 0 ? { label: '<i class="fa-solid fa-play me-1"></i> ดึงข้อมูลเลย', onClick: vbrpStartExtraction } : null
         });
@@ -616,7 +616,7 @@ async function vbrpConfirmClear() {
             tone: 'success',
             title: 'ล้างข้อมูล VBRP แล้ว',
             message: `ลบ ${Number(json.deleted_rows || 0).toLocaleString()} รายการ จาก ${Number(json.deleted_files || 0).toLocaleString()} ไฟล์`,
-            detailHtml: '<div class="cn-notice-note">ไฟล์ Excel ยังอยู่ใน VBRP/finished ถ้าต้องการดึงข้อมูลใหม่ ให้ย้ายกลับไปที่ VBRP/upload here</div>'
+            detailHtml: '<div class="cn-notice-note">ไฟล์ต้นฉบับยังอยู่ในโฟลเดอร์ invoice/vbrp ถ้าต้องการดึงข้อมูลใหม่ กดดึงข้อมูลอีกครั้ง</div>'
         });
     } catch (err) {
         bootstrap.Modal.getOrCreateInstance(document.getElementById('vbrpClearModal')).hide();

@@ -195,9 +195,9 @@ $jobId = (int)$job['id'];
 $upload = $jm->getJobVbrpUploadDir($job);
 $finished = $jm->getJobVbrpFinishedDir($job);
 check(
-    'the VBRP folders of a Job are VBRP/upload here and VBRP/finished inside the Job folder',
-    basename(dirname($upload)) === 'VBRP' && basename($upload) === 'upload here' && basename($finished) === 'finished'
-        && dirname(dirname($upload)) === $jm->getJobFolderDir($job, false),
+    'the VBRP files are read from upload/<Job>/invoice/vbrp and copied to VBRP/finished inside the Job folder',
+    $upload === App\Config::getUploadPath() . DIRECTORY_SEPARATOR . basename($jm->getJobFolderDir($job, false)) . DIRECTORY_SEPARATOR . 'invoice' . DIRECTORY_SEPARATOR . 'vbrp'
+        && basename($finished) === 'finished' && basename(dirname($finished)) === 'VBRP' && dirname(dirname($finished)) === $jm->getJobFolderDir($job, false),
     $upload
 );
 
@@ -221,7 +221,7 @@ file_put_contents($upload . '/broken.xlsx', 'not a zip');
 
 $scan = $jm->scanVbrp($jobId);
 check(
-    'the scan lists the .xlsx files of upload here, subfolders included, and leaves out lock files and other types',
+    'the scan lists the .xlsx files of invoice/vbrp, subfolders included, and leaves out lock files and other types',
     $scan['total_in_upload'] === 4 && $scan['new_count'] === 4 && $scan['existing_count'] === 0
         && array_column($scan['new_files'], 'rel_path') === ['a.xlsx', 'broken.xlsx', 'empty.xlsx', 'sub/b.xlsx'],
     json_encode(array_column($scan['new_files'], 'rel_path'))
@@ -229,11 +229,11 @@ check(
 
 $result = $jm->extractVbrp($jobId, array_column($scan['new_files'], 'rel_path'), false);
 check(
-    'reading the files records the readable ones and moves them to finished; an empty workbook and a broken file stay in upload here with the reason',
+    'reading the files records the readable ones and copies them to finished, leaving every file where it was; an empty workbook and a broken file are listed with the reason',
     $result['processed_files'] === 2 && $result['rows_count'] === 8 && $result['no_data'] === ['empty.xlsx']
         && count($result['failed']) === 1 && $result['failed'][0]['filename'] === 'broken.xlsx'
-        && is_file($finished . '/a.xlsx') && is_file($finished . '/b.xlsx') && !is_file($upload . '/a.xlsx') && !is_dir($upload . '/sub')
-        && is_file($upload . '/empty.xlsx') && is_file($upload . '/broken.xlsx'),
+        && is_file($finished . '/a.xlsx') && is_file($finished . '/b.xlsx') && is_file($upload . '/a.xlsx') && is_file($upload . '/sub/b.xlsx')
+        && is_file($upload . '/empty.xlsx') && is_file($upload . '/broken.xlsx') && !is_file($finished . '/empty.xlsx'),
     json_encode($result, JSON_UNESCAPED_UNICODE)
 );
 
@@ -250,10 +250,10 @@ check('the counts are the files, rows and invoices of the Job', $jm->vbrpCounts(
 
 copy($bookA, $upload . '/a.xlsx');
 $again = $jm->scanVbrp($jobId);
-check('a file whose name was read before is an existing file in the scan', $again['existing_count'] === 1 && $again['existing_files'][0]['filename'] === 'a.xlsx', json_encode($again['existing_files']));
+check('a file whose name was read before is an existing file in the scan', $again['existing_count'] === 2 && array_column($again['existing_files'], 'filename') === ['a.xlsx', 'b.xlsx'], json_encode($again['existing_files']));
 $skip = $jm->extractVbrp($jobId, ['a.xlsx'], false);
 check(
-    'an existing file is skipped (and stays in upload here) unless it is read again to replace its rows',
+    'an existing file is skipped (and stays in invoice/vbrp) unless it is read again to replace its rows',
     $skip['processed_files'] === 0 && $skip['skipped_existing'] === ['a.xlsx'] && is_file($upload . '/a.xlsx') && count($jm->getVbrpRows($jobId)) === 8
 );
 $replace = $jm->extractVbrp($jobId, ['a.xlsx'], true);
@@ -300,7 +300,7 @@ check('a path outside the VBRP folders reads nothing', $escape['processed_files'
 
 // --- API
 $apiScan = api('job_vbrp_scan', [], ['job_id' => $jobId]);
-check('job_vbrp_scan answers the scan', ($apiScan['status'] ?? '') === 'success' && ($apiScan['data']['total_in_upload'] ?? null) === 2, json_encode($apiScan, JSON_UNESCAPED_UNICODE));
+check('job_vbrp_scan answers the scan: every file still in invoice/vbrp, the three not recorded as new', ($apiScan['status'] ?? '') === 'success' && ($apiScan['data']['total_in_upload'] ?? null) === 5 && ($apiScan['data']['new_count'] ?? null) === 3, json_encode($apiScan, JSON_UNESCAPED_UNICODE));
 $apiRows = api('job_vbrp_rows', [], ['job_id' => $jobId]);
 check('job_vbrp_rows answers the rows and the counts', ($apiRows['count'] ?? null) === 8 && ($apiRows['counts'] ?? null) === ['files' => 2, 'rows' => 8, 'invoices' => 8], json_encode($apiRows['counts'] ?? null));
 $apiExtract = api('job_vbrp_extract_batch', ['job_id' => $jobId, 'files' => json_encode(['empty.xlsx'])]);
@@ -337,8 +337,8 @@ check(
         && strpos($vbrpNoComments, 'data-vbrp-open-folder="1"') !== false
 );
 check(
-    'vbrp.php shows the files and rows of the Job in its status bar and the count waiting in upload here',
-    strpos(plainText($vbrpPage), 'ไฟล์: 2 | รายการ: 8') !== false && strpos($vbrpPage, 'id="vbrp-upload-count" class="tabular-num text-dark">2<') !== false
+    'vbrp.php shows the files and rows of the Job in its status bar and the count of files in invoice/vbrp not read yet',
+    strpos(plainText($vbrpPage), 'ไฟล์: 2 | รายการ: 8') !== false && strpos($vbrpPage, 'id="vbrp-upload-count" class="tabular-num text-dark">3<') !== false
 );
 check(
     'vbrp.php loads the column colour script last and leads back to the portal of its Job',

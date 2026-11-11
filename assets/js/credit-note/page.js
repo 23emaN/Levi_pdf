@@ -111,7 +111,7 @@ async function creditNoteConfirmClear() {
             tone: 'success',
             title: 'ล้างข้อมูลใบลดหนี้แล้ว',
             message: `ลบใบลดหนี้ ${Number(json.deleted_documents || 0).toLocaleString()} ใบ จาก ${Number(json.deleted_files || 0).toLocaleString()} ไฟล์`,
-            detailHtml: '<div class="cn-notice-note">ไฟล์ PDF ยังอยู่ใน CREDIT NOTE/finished ถ้าต้องการดึงข้อมูลใหม่ ให้ย้ายกลับไปที่ CREDIT NOTE/upload here</div>'
+            detailHtml: '<div class="cn-notice-note">ไฟล์ต้นฉบับยังอยู่ในโฟลเดอร์ cn/pdf ถ้าต้องการดึงข้อมูลใหม่ กดดึงข้อมูลอีกครั้ง</div>'
         });
     } catch (err) {
         bootstrap.Modal.getOrCreateInstance(document.getElementById('creditNoteClearModal')).hide();

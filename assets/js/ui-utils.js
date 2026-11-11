@@ -340,6 +340,52 @@ function showFolderNotOpenedModal(json) {
     if (backdrops.length > 0) backdrops[backdrops.length - 1].style.zIndex = '1060';
 }
 
+/**
+ * The Excel files of the asn folder of the Job: upload/{Job}/invoice/asn (side 'invoice') or upload/{Job}/cn/asn
+ * (side 'cn'). Answers { folder, files: [{ filename, rel_path, size, imported }] }.
+ */
+async function asnFolderList(side) {
+    const res = await fetch(`api.php?action=job_asn_folder&job_id=${CURRENT_JOB_ID}&side=${side}`);
+    const json = await res.json();
+    if (json.status !== 'success') throw new Error(json.message || 'อ่านโฟลเดอร์ asn ไม่สำเร็จ');
+    return json.data;
+}
+
+/**
+ * Fetches files listed by asnFolderList as File objects, so the page reads them as if they were picked by hand
+ */
+async function asnFolderDownload(side, entries) {
+    const files = [];
+    for (const entry of entries) {
+        const res = await fetch(`api.php?action=job_asn_folder_file&job_id=${CURRENT_JOB_ID}&side=${side}&rel_path=${encodeURIComponent(entry.rel_path)}`);
+        if (!res.ok) {
+            let message = `โหลดไฟล์ ${entry.filename} ไม่สำเร็จ`;
+            try { message = (await res.json()).message || message; } catch (e) { /* not JSON */ }
+            throw new Error(message);
+        }
+        files.push(new File([await res.blob()], entry.filename));
+    }
+    return files;
+}
+
+/**
+ * Which files of the asn folder to read: the ones not imported yet, or, when every file was imported before and the
+ * user agrees, all of them. null when there is nothing to read (onEmpty has told the user why).
+ */
+async function asnFolderChoose(side, onEmpty) {
+    const { folder, files } = await asnFolderList(side);
+    if (files.length === 0) {
+        onEmpty(folder);
+        return null;
+    }
+    const fresh = files.filter(f => !f.imported);
+    if (fresh.length > 0) return fresh;
+    hideLoadingOverlay();
+    const again = window.confirm(`ไฟล์ ASN ทั้ง ${files.length.toLocaleString()} ไฟล์ใน ${folder} เคยนำเข้าแล้ว
+ต้องการอ่านใหม่ทั้งหมดหรือไม่?`);
+    return again ? files : null;
+}
+
 function openJobFolder(target, round) {
     return openFolder({ job_id: CURRENT_JOB_ID, target, round: round || 0 });
 }

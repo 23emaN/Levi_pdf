@@ -139,9 +139,9 @@ $cnUpload = $jm->getJobCnUploadDir($job, false);
 $cnFinished = $jm->getJobCnFinishedDir($job, false);
 $jobDir = $jm->getJobFolderDir($job, false);
 check(
-    'a new Job has its own credit note folders, "CREDIT NOTE/upload here" and "CREDIT NOTE/finished", next to the TAX INVOICE folder',
-    is_dir($cnUpload) && is_dir($cnFinished) && $cnUpload === $jobDir . DIRECTORY_SEPARATOR . 'CREDIT NOTE' . DIRECTORY_SEPARATOR . 'upload here'
-        && $cnFinished === $jobDir . DIRECTORY_SEPARATOR . 'CREDIT NOTE' . DIRECTORY_SEPARATOR . 'finished' && is_dir($jobDir . '/TAX INVOICE/upload here')
+    'a new Job reads its credit notes from upload/<Job>/cn/pdf and keeps the copies it read in myfile/<Job>/CREDIT NOTE/finished, next to the TAX INVOICE folder',
+    is_dir($cnUpload) && is_dir($cnFinished) && $cnUpload === App\Config::getUploadPath() . DIRECTORY_SEPARATOR . 'CN flow' . DIRECTORY_SEPARATOR . 'cn' . DIRECTORY_SEPARATOR . 'pdf'
+        && $cnFinished === $jobDir . DIRECTORY_SEPARATOR . 'CREDIT NOTE' . DIRECTORY_SEPARATOR . 'finished' && is_dir($jobDir . '/TAX INVOICE') && !is_dir($jobDir . '/CREDIT NOTE/upload here')
 );
 
 sample(STD, $cnUpload);
@@ -164,14 +164,14 @@ sort($newRel);
 $expectedRel = [ATTACHMENT, 'sub/deeper/' . VARIANCE, 'sub/' . TWO, STD, ZERO, 'broken.pdf', 'delivery order.pdf'];
 sort($expectedRel);
 check(
-    'the credit note scan lists every PDF of its own upload here folder as new, subfolders joined with /, and not the PDF waiting for the Tax Invoice side',
+    'the credit note scan lists every PDF of its own folder upload/<Job>/cn/pdf as new, subfolders joined with /, and not the PDF waiting for the Tax Invoice side',
     ($scan['status'] ?? '') === 'success' && $newRel === $expectedRel && ($data['new_count'] ?? 0) === 7 && ($data['existing_count'] ?? -1) === 0
         && ($data['duplicate_count'] ?? -1) === 0 && ($data['total_in_upload'] ?? 0) === 7 && ($data['existing_files'] ?? null) === [] && ($data['duplicate_files'] ?? null) === [],
     json_encode($scan, JSON_UNESCAPED_UNICODE)
 );
 check(
-    'the scan names the two credit note folders as myfile/<job folder>/CREDIT NOTE/...',
-    ($data['upload_dir'] ?? '') === 'myfile/CN flow/CREDIT NOTE/upload here' && ($data['finished_dir'] ?? '') === 'myfile/CN flow/CREDIT NOTE/finished'
+    'the scan names the two credit note folders as upload/<job folder>/cn/pdf and myfile/<job folder>/CREDIT NOTE/finished',
+    ($data['upload_dir'] ?? '') === 'upload/CN flow/cn/pdf' && ($data['finished_dir'] ?? '') === 'myfile/CN flow/CREDIT NOTE/finished'
 );
 $tiScan = api('scan_job_files', [], ['job_id' => $jobId]);
 check(
@@ -194,9 +194,12 @@ check(
 );
 $readNames = [STD, TWO, VARIANCE, ATTACHMENT, ZERO];
 sort($readNames);
+$uploadNames = [ATTACHMENT, 'sub/deeper/' . VARIANCE, 'sub/' . TWO, STD, ZERO, 'broken.pdf', 'delivery order.pdf'];
+sort($uploadNames);
 check(
-    'read files move from credit note upload here to credit note finished and the subfolders they leave empty go; the two unread files stay',
-    pdfNames($cnFinished) === $readNames && pdfNames($cnUpload) === ['broken.pdf', 'delivery order.pdf'] && !is_dir($cnUpload . '/sub'),
+    'read files are copied to credit note finished; every file stays where it was in upload/<Job>/cn/pdf, subfolders included',
+    pdfNames($cnFinished) === $readNames && pdfNames($cnUpload) === $uploadNames
+        && hash_file('sha256', $cnFinished . '/' . TWO) === hash_file('sha256', $cnUpload . '/sub/' . TWO),
     json_encode([pdfNames($cnFinished), pdfNames($cnUpload)], JSON_UNESCAPED_UNICODE)
 );
 
@@ -229,11 +232,14 @@ check(
 );
 
 sample(STD, $cnUpload, 'std copy.pdf');
-sample(STD, $cnUpload);
+$sorted = function (array $names): array {
+    sort($names);
+    return $names;
+};
 $scan = api('job_cn_scan', [], ['job_id' => $jobId]);
 check(
     'a file whose name is already recorded is existing; a file holding a recorded credit note number under another name is a duplicate naming that file and the numbers',
-    array_column($scan['data']['existing_files'] ?? [], 'filename') === [STD]
+    $sorted(array_column($scan['data']['existing_files'] ?? [], 'filename')) === $readNames
         && ($scan['data']['duplicate_files'] ?? null) === [['filename' => 'std copy.pdf', 'rel_path' => 'std copy.pdf', 'duplicate_of' => STD, 'doc_nos' => ['93251044-1']]]
         && array_column($scan['data']['new_files'] ?? [], 'filename') === ['broken.pdf', 'delivery order.pdf'],
     json_encode($scan['data'] ?? $scan, JSON_UNESCAPED_UNICODE)
@@ -242,7 +248,7 @@ unlink($cnUpload . '/' . STD);
 
 $skip = api('job_cn_extract_batch', ['job_id' => $jobId, 'files' => json_encode(['std copy.pdf'])]);
 check(
-    'a duplicate is skipped and stays in upload here when replacing is not asked',
+    'a duplicate is skipped and stays in upload/<Job>/cn/pdf when replacing is not asked',
     ($skip['skipped_duplicates'] ?? null) === [['filename' => 'std copy.pdf', 'duplicate_of' => STD]] && ($skip['processed_files'] ?? -1) === 0
         && is_file($cnUpload . '/std copy.pdf') && (cnDocs($jobId)['counts'] ?? null) === ['files' => 5, 'documents' => 6, 'asn' => ['files' => 0, 'rows' => 0]],
     json_encode($skip, JSON_UNESCAPED_UNICODE)
@@ -393,11 +399,11 @@ $splitRel = array_column($splitScan['data']['new_files'] ?? [], 'rel_path');
 sort($splitRel);
 $splitRead = api('job_cn_extract_batch', ['job_id' => $beforeSplit, 'files' => json_encode($splitScan['data']['new_files'] ?? [])]);
 check(
-    'credit notes waiting in the old "credit note" folder of a Job made before the split are scanned and read from CREDIT NOTE after the first request renames it',
+    'credit notes waiting in the old "credit note" folder of a Job made before the split move to upload/<Job>/cn/pdf on the first request and are scanned and read there, into CREDIT NOTE/finished',
     in_array('CREDIT NOTE', scandir($splitDir), true) && !in_array('credit note', scandir($splitDir), true)
-        && $splitRel === [TWO, 'sub/' . STD] && ($splitScan['data']['upload_dir'] ?? '') === 'myfile/Credit notes before the split/CREDIT NOTE/upload here'
+        && $splitRel === [TWO, 'sub/' . STD] && ($splitScan['data']['upload_dir'] ?? '') === 'upload/Credit notes before the split/cn/pdf'
         && ($splitRead['documents_count'] ?? 0) === 3 && pdfNames($splitDir . '/CREDIT NOTE/finished') === [STD, TWO]
-        && pdfNames($splitDir . '/CREDIT NOTE/upload here') === [],
+        && !is_dir($splitDir . '/CREDIT NOTE/upload here') && pdfNames($root . '/upload/Credit notes before the split/cn/pdf') === [TWO, 'sub/' . STD],
     json_encode([$splitScan, $splitRead['documents_count'] ?? $splitRead], JSON_UNESCAPED_UNICODE)
 );
 

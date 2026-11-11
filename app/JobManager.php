@@ -123,7 +123,7 @@ class JobManager
             'name' => $job['name'],
             'pdf_files' => $pdf['files'],
             'pdf_rows' => $pdf['rows'],
-            'upload_files' => count(FileManager::getPdfFiles($this->folders->getJobUploadDir($job, false))),
+            'upload_files' => $this->items->waitingCount($job),
             'asn_files' => $asn['files'],
             'asn_rows' => $asn['rows'],
             'print_files' => FileManager::countFiles($this->folders->getJobPrintDir($job, false)),
@@ -197,6 +197,22 @@ class JobManager
     /**
      * @param array|int $jobOrId
      */
+    public function getJobAsnDir($jobOrId, bool $autoCreate = true): string
+    {
+        return $this->folders->getJobAsnDir($this->folderJob($jobOrId), $autoCreate);
+    }
+
+    /**
+     * @param array|int $jobOrId
+     */
+    public function getJobCnAsnDir($jobOrId, bool $autoCreate = true): string
+    {
+        return $this->folders->getJobCnAsnDir($this->folderJob($jobOrId), $autoCreate);
+    }
+
+    /**
+     * @param array|int $jobOrId
+     */
     public function getJobFinishedDir($jobOrId, bool $autoCreate = true): string
     {
         return $this->folders->getJobFinishedDir($this->folderJob($jobOrId), $autoCreate);
@@ -248,6 +264,30 @@ class JobManager
     public function getJobCoverDir($jobOrId, bool $autoCreate = true): string
     {
         return $this->folders->getJobCoverDir($this->folderJob($jobOrId), $autoCreate);
+    }
+
+    /**
+     * @param array|int $jobOrId
+     */
+    public function getJobWorkDir($jobOrId, bool $autoCreate = true): string
+    {
+        return $this->folders->getJobWorkDir($this->folderJob($jobOrId), $autoCreate);
+    }
+
+    /**
+     * @param array|int $jobOrId
+     */
+    public function getJobWorkInvoiceDir($jobOrId, bool $autoCreate = true): string
+    {
+        return $this->folders->getJobWorkInvoiceDir($this->folderJob($jobOrId), $autoCreate);
+    }
+
+    /**
+     * @param array|int $jobOrId
+     */
+    public function getJobWorkCnDir($jobOrId, bool $autoCreate = true): string
+    {
+        return $this->folders->getJobWorkCnDir($this->folderJob($jobOrId), $autoCreate);
     }
 
     /**
@@ -318,6 +358,22 @@ class JobManager
     public function extractCreditNotes(int $jobId, array $relPaths, bool $replaceDuplicates): array
     {
         return $this->creditNotes->extractBatch($jobId, $relPaths, $replaceDuplicates);
+    }
+
+    /**
+     * Files in the upload/ folders of the Job that it has not read yet: 'pdf' (Tax Invoice), 'cn' (credit note PDFs),
+     * 'vbrp'
+     */
+    public function waitingCount(int $jobId, string $kind): int
+    {
+        if ($kind === 'cn') {
+            return $this->creditNotes->waitingCount($jobId);
+        }
+        if ($kind === 'vbrp') {
+            return $this->vbrp->waitingCount($jobId);
+        }
+        $job = $this->jobs->getJob($jobId);
+        return $job ? $this->items->waitingCount($job) : 0;
     }
 
     public function getCreditNotes(int $jobId): array
@@ -407,6 +463,59 @@ class JobManager
     public function importVbrp(int $jobId, string $tmpPath, string $originalName, int $uploadError = UPLOAD_ERR_OK): array
     {
         return $this->vbrp->importUpload($jobId, $tmpPath, $originalName, $uploadError);
+    }
+
+    /** Excel files the ASN pages read from upload/{Job}/.../asn */
+    private const ASN_EXTENSIONS = ['xlsx', 'xls'];
+
+    /**
+     * The Excel files in the asn folder of one side ('invoice' or 'cn'), subfolders included. A file is imported when
+     * the Job holds ASN rows from one of its sheets (the source label starts with the file name).
+     *
+     * @return array ['folder' => as the page shows it, 'files' => [['filename', 'rel_path', 'size', 'imported']]]
+     */
+    public function asnFolderFiles(int $jobId, string $side): array
+    {
+        $dir = $this->asnFolder($jobId, $side);
+        $sources = $side === 'cn' ? $this->creditNoteAsn->sourceFiles($jobId) : $this->asn->sourceFiles($jobId);
+        $separator = $side === 'cn' ? ' / ' : ' [';
+        $prefixLen = strlen(rtrim($dir, '/\\')) + 1;
+        $files = [];
+        foreach (FileManager::getFilesWithExtension($dir, self::ASN_EXTENSIONS) as $path) {
+            $name = basename($path);
+            $imported = false;
+            foreach ($sources as $source) {
+                if ($source === $name || strpos($source, $name . $separator) === 0) {
+                    $imported = true;
+                    break;
+                }
+            }
+            $files[] = ['filename' => $name, 'rel_path' => str_replace('\\', '/', substr($path, $prefixLen)), 'size' => (int)filesize($path), 'imported' => $imported];
+        }
+        return ['folder' => JobFolders::displayPath($dir), 'files' => $files];
+    }
+
+    /**
+     * The path of one Excel file of that asn folder, or null when $relPath names nothing inside it
+     */
+    public function asnFolderFile(int $jobId, string $side, string $relPath): ?string
+    {
+        $dir = $this->asnFolder($jobId, $side);
+        $path = realpath($dir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relPath));
+        if ($path === false || !is_file($path) || !FileManager::isSubpath($path, (string)realpath($dir))
+            || !in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), self::ASN_EXTENSIONS, true)) {
+            return null;
+        }
+        return $path;
+    }
+
+    private function asnFolder(int $jobId, string $side): string
+    {
+        $job = $this->jobs->getJob($jobId);
+        if (!$job) {
+            throw new \RuntimeException('ไม่พบ Job นี้');
+        }
+        return $side === 'cn' ? $this->folders->getJobCnAsnDir($job) : $this->folders->getJobAsnDir($job);
     }
 
     public function asnCounts(int $jobId): array

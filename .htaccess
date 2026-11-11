@@ -7,7 +7,7 @@ Options -Indexes
 # ห้ามเปิดฐานข้อมูล ไฟล์ PDF ของ Job และโค้ดผ่านเบราว์เซอร์ (PHP ยังอ่านเขียนได้ตามปกติ)
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteRule ^(data|myfile|date_edit|app|vendor|tests|docs|scratch)(/|$) - [F,L]
+    RewriteRule ^(data|myfile|upload|date_edit|app|vendor|tests|docs|scratch)(/|$) - [F,L]
 </IfModule>
 
 <FilesMatch "(\.(sqlite|sqlite-wal|sqlite-shm|md|lock|log)|^composer\.json)$">

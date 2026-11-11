@@ -35,8 +35,9 @@ if (!$jobManager->jobFolderExists($job)) {
 
 $cnCounts = $jobManager->creditNoteCounts($jobId);
 $asnCounts = isset($cnCounts['asn']) ? $cnCounts['asn'] : ['files' => 0, 'rows' => 0];
-$cnUploadDir = $jobManager->getJobCnUploadDir($job, false);
-$cnUploadCount = is_dir($cnUploadDir) ? count(FileManager::getPdfFiles($cnUploadDir)) : 0;
+$cnUploadCount = $jobManager->waitingCount($jobId, 'cn');
+$cnUploadFolderText = JobFolders::displayPath($jobManager->getJobCnUploadDir($job)) . '/';
+$cnAsnFolderText = JobFolders::displayPath($jobManager->getJobCnAsnDir($job)) . '/';
 $cnFinishedText = JobFolders::displayPath($jobManager->getJobCnFinishedDir($job, false)) . '/';
 
 // The rule sentence itself (exact to the satang today) is added in the browser from CN_TOLERANCES, which carries
@@ -171,9 +172,9 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
             <span class="header-title">
                 <i class="fa-solid fa-folder text-warning me-1"></i> <?= htmlspecialchars($job['name']) ?>
             </span>
-            <span class="header-file-pill folder-link" title="คลิกเพื่อเปิดโฟลเดอร์ CREDIT NOTE/upload here ใน Explorer" onclick="openJobFolder('cn_upload')">
+            <span class="header-file-pill folder-link" title="คลิกเพื่อเปิดโฟลเดอร์ <?= htmlspecialchars($cnUploadFolderText) ?> ใน Explorer (นับเฉพาะไฟล์ที่ยังไม่ได้ดึงข้อมูล)" onclick="openJobFolder('cn_upload')">
                 <i class="fa-regular fa-folder-open me-1 text-primary"></i>
-                upload here/ (<strong id="credit-note-upload-count" class="tabular-num text-dark"><?= number_format($cnUploadCount) ?></strong> ไฟล์)
+                cn/pdf/ (ใหม่ <strong id="credit-note-upload-count" class="tabular-num text-dark"><?= number_format($cnUploadCount) ?></strong> ไฟล์)
             </span>
         </div>
 
@@ -206,13 +207,13 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
         <div class="app-toolbar toolbar-stacked">
             <div class="toolbar-row">
                 <button class="btn btn-sm px-3 btn-tb btn-tb-accent btn-step-extract" id="credit-note-start" type="button">
-                    <i class="fa-solid fa-play me-1"></i> ดึงข้อมูลจาก upload here
+                    <i class="fa-solid fa-play me-1"></i> ดึงข้อมูลจากโฟลเดอร์ cn/pdf
                 </button>
                 <button class="btn btn-outline-danger btn-sm" id="credit-note-stop" type="button" style="display: none;">
                     <i class="fa-solid fa-stop me-1"></i> หยุด
                 </button>
-                <button class="btn btn-sm btn-tb" id="credit-note-open-upload" type="button" onclick="openJobFolder('cn_upload')" title="เปิดโฟลเดอร์ CREDIT NOTE/upload here ใน Explorer">
-                    <i class="fa-regular fa-folder-open me-1"></i> upload here
+                <button class="btn btn-sm btn-tb" id="credit-note-open-upload" type="button" onclick="openJobFolder('cn_upload')" title="เปิดโฟลเดอร์ <?= htmlspecialchars($cnUploadFolderText) ?> ใน Explorer">
+                    <i class="fa-regular fa-folder-open me-1"></i> cn/pdf
                 </button>
                 <button class="btn btn-sm btn-tb" id="credit-note-open-finished" type="button" onclick="openJobFolder('cn_finished')" title="เปิดโฟลเดอร์ CREDIT NOTE/finished ใน Explorer">
                     <i class="fa-regular fa-folder me-1"></i> finished
@@ -254,6 +255,9 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
     <div id="credit-note-asn-section" data-step="<?= $asnCounts['rows'] > 0 ? 'compare' : 'select' ?>" style="<?= creditNoteTabStyle('asn', $initialTab) ?>">
         <div class="app-toolbar toolbar-stacked">
             <div class="toolbar-row">
+                <button class="btn btn-sm px-3 btn-tb btn-tb-green btn-step-select" id="credit-note-asn-folder" type="button" title="อ่านไฟล์ ASN ที่วางไว้ใน <?= htmlspecialchars($cnAsnFolderText) ?>">
+                    <i class="fa-regular fa-folder-open me-1"></i> อ่านจากโฟลเดอร์ asn
+                </button>
                 <input type="file" id="credit-note-asn-file" accept=".xlsx, .xls" multiple class="d-none">
                 <button class="btn btn-sm px-3 btn-tb btn-tb-green btn-step-select" id="credit-note-asn-choose" type="button">
                     <i class="fa-solid fa-file-circle-plus me-1"></i> เลือกไฟล์ ASN เพิ่ม (.xlsx)
@@ -484,13 +488,13 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
         <div class="modal-content border-0 shadow">
             <div class="modal-header border-bottom py-2 px-3 bg-light d-flex align-items-center justify-content-between">
                 <h6 class="modal-title fw-bold text-dark mb-0">
-                    <i class="fa-solid fa-copy text-primary me-2"></i>ตรวจสอบไฟล์ใน upload here
+                    <i class="fa-solid fa-copy text-primary me-2"></i>ตรวจสอบไฟล์ในโฟลเดอร์ cn/pdf
                 </h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-3">
                 <div class="small text-secondary mb-2">
-                    ไฟล์ PDF ใน CREDIT NOTE/upload here ทั้งหมด <strong class="tabular-num text-dark" id="creditNoteScanTotal">0</strong> ไฟล์ บางไฟล์เคยดึงข้อมูลเข้า Job นี้แล้ว
+                    ไฟล์ PDF ในโฟลเดอร์ cn/pdf ทั้งหมด <strong class="tabular-num text-dark" id="creditNoteScanTotal">0</strong> ไฟล์ บางไฟล์เคยดึงข้อมูลเข้า Job นี้แล้ว
                 </div>
                 <div class="list-group mb-3">
                     <div class="list-group-item d-flex justify-content-between align-items-center">
@@ -511,7 +515,7 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
                 </div>
                 <div class="fix-note">
                     <i class="fa-solid fa-circle-info text-primary"></i>
-                    <span>ข้าม: ดึงเฉพาะไฟล์ใหม่ ไฟล์ที่ซ้ำยังอยู่ใน upload here แทนที่: ดึงทุกไฟล์ แล้วใช้ข้อมูลจากไฟล์ใหม่แทนข้อมูลเดิมของเลขใบลดหนี้เดียวกัน</span>
+                    <span>ข้าม: ดึงเฉพาะไฟล์ใหม่ ไฟล์ที่ซ้ำไม่ถูกอ่าน แทนที่: ดึงทุกไฟล์ แล้วใช้ข้อมูลจากไฟล์ใหม่แทนข้อมูลเดิมของเลขใบลดหนี้เดียวกัน</span>
                 </div>
             </div>
             <div class="modal-footer border-top py-2 px-3 bg-light d-flex align-items-center justify-content-between gap-2">
@@ -570,7 +574,7 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
                 </div>
                 <div class="fix-note">
                     <i class="fa-solid fa-circle-info text-primary"></i>
-                    <span>ไฟล์ PDF ไม่ถูกลบ ยังอยู่ในโฟลเดอร์ CREDIT NOTE/finished ถ้าต้องการดึงข้อมูลใหม่ ให้ย้ายไฟล์กลับไปที่ CREDIT NOTE/upload here แล้วกดดึงข้อมูลอีกครั้ง</span>
+                    <span>ไฟล์ PDF ไม่ถูกลบ ไฟล์ต้นฉบับยังอยู่ในโฟลเดอร์ <?= htmlspecialchars($cnUploadFolderText) ?> ถ้าต้องการดึงข้อมูลใหม่ กดดึงข้อมูลอีกครั้ง</span>
                 </div>
             </div>
             <div class="modal-footer border-top py-2 px-3 bg-light d-flex align-items-center justify-content-end gap-2">
