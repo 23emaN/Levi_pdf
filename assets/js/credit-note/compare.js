@@ -113,6 +113,33 @@ function creditNoteCompareSortBy(th) {
     runWithLoading('กำลังเรียงลำดับข้อมูล...', `เรียงตามคอลัมน์ "${th.textContent.trim()}" (${creditNoteCompare.shown.length.toLocaleString()} รายการ)`, creditNoteCompareApply);
 }
 
+// Reads the ASN Excel files placed in upload/{Job}/cn/asn, the same way as files picked by hand
+async function creditNoteAsnReadFolder() {
+    try {
+        showLoadingOverlay('กำลังตรวจโฟลเดอร์ asn...', 'upload/.../cn/asn');
+        const chosen = await asnFolderChoose('cn', folder => {
+            hideLoadingOverlay();
+            creditNoteShowNotice({
+                tone: 'warning',
+                title: 'ไม่พบไฟล์ ASN ในโฟลเดอร์ asn',
+                message: 'ยังไม่มีไฟล์ Excel สำหรับนำเข้า',
+                detailHtml: `<div class="cn-notice-note">วางไฟล์ ASN (.xlsx) ไว้ที่ <span class="tabular-num">${escapeHtml(folder)}</span> แล้วกด "อ่านจากโฟลเดอร์ asn" อีกครั้ง</div>`,
+                action: { label: '<i class="fa-regular fa-folder-open me-1"></i> เปิดโฟลเดอร์ asn', onClick: () => openJobFolder('cn_asn') }
+            });
+        });
+        if (!chosen) {
+            hideLoadingOverlay();
+            return;
+        }
+        showLoadingOverlay('กำลังโหลดไฟล์ ASN...', `${chosen.length.toLocaleString()} ไฟล์จากโฟลเดอร์ asn`);
+        const files = await asnFolderDownload('cn', chosen);
+        await creditNoteAsnChoose({ target: { files, value: '' } });
+    } catch (err) {
+        hideLoadingOverlay();
+        creditNoteShowNotice({ tone: 'error', title: 'เกิดข้อผิดพลาด', message: 'อ่านไฟล์จากโฟลเดอร์ asn ไม่สำเร็จ: ' + err.message });
+    }
+}
+
 async function creditNoteAsnChoose(event) {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
@@ -450,6 +477,7 @@ function creditNoteCompareInit() {
     const input = document.getElementById('credit-note-asn-file');
     input.addEventListener('change', creditNoteAsnChoose);
     document.getElementById('credit-note-asn-choose').addEventListener('click', () => input.click());
+    document.getElementById('credit-note-asn-folder').addEventListener('click', creditNoteAsnReadFolder);
     document.getElementById('creditNoteAsnImportDetails').addEventListener('change', e => {
         if (e.target.matches('select[data-file]')) creditNoteAsnPickSheet(e.target);
     });

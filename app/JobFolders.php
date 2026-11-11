@@ -3,9 +3,19 @@
 namespace App;
 
 /**
- * The folders of a Job in myfile/, the only place that knows their names. A Job folder holds one folder per system:
- * TAX INVOICE (upload here, finished, print), CREDIT NOTE (upload here, finished), VBRP (upload here, finished) and
- * COVER SHEET (the cover sheets made by CoverSheet).
+ * The folders of a Job, the only place that knows their names.
+ *
+ * upload/{Job folder}/ holds the files the user gives the Job, read from where they are and never moved or deleted:
+ * invoice/pdf (Tax Invoice PDFs), invoice/asn, invoice/vbrp, cn/pdf (credit note PDFs) and cn/asn. Deleting the Job
+ * leaves it as it is.
+ *
+ * myfile/{Job folder}/ holds what the program makes, one folder per system: TAX INVOICE (finished, print),
+ * CREDIT NOTE (finished), VBRP (finished) and COVER SHEET (the cover sheets made by CoverSheet). "finished" keeps a
+ * copy of each file read, which the fix, split and print steps use.
+ *
+ * A Job made before upload/ kept its waiting files in an "upload here" folder of each system in myfile/. The first
+ * request that asks for a folder of the Job creates upload/{Job folder}/ and moves those files there, without
+ * overwriting a file of the same name (that one stays where it was).
  *
  * A Job made before this layout keeps upload here, finished and print directly in its folder and its credit notes in
  * "credit note". The first request that asks for a folder of the Job moves each of them into place by renaming it.
@@ -19,6 +29,19 @@ class JobFolders
     public const VBRP = 'VBRP';
     public const COVER = 'COVER SHEET';
     public const PRINT_ROUND_PREFIX = 'print ครั้งที่ ';
+
+    /** The folders of a Job in upload/{Job folder}/, for the files of its work */
+    public const WORK_INVOICE = 'invoice';
+    public const WORK_CN = 'cn';
+    public const WORK_PDF = 'pdf';
+    public const WORK_ASN = 'asn';
+    public const WORK_VBRP = 'vbrp';
+
+    /** The folders inside invoice and cn, as the folder => its folders */
+    public const WORK_LAYOUT = [
+        self::WORK_INVOICE => [self::WORK_PDF, self::WORK_ASN, self::WORK_VBRP],
+        self::WORK_CN => [self::WORK_PDF, self::WORK_ASN],
+    ];
 
     private const UPLOAD_DIR = 'upload here';
     private const FINISHED_DIR = 'finished';
@@ -68,9 +91,20 @@ class JobFolders
         return $this->place($job, self::TAX_INVOICE, $autoCreate);
     }
 
+    /**
+     * Where the Tax Invoice PDFs are read from: upload/{Job folder}/invoice/pdf
+     */
     public function getJobUploadDir(array $job, bool $autoCreate = true): string
     {
-        return $this->place($job, self::TAX_INVOICE . '/' . self::UPLOAD_DIR, $autoCreate);
+        return $this->workPlace($job, self::WORK_INVOICE . '/' . self::WORK_PDF, $autoCreate);
+    }
+
+    /**
+     * Where the Tax Invoice ASN files are read from: upload/{Job folder}/invoice/asn
+     */
+    public function getJobAsnDir(array $job, bool $autoCreate = true): string
+    {
+        return $this->workPlace($job, self::WORK_INVOICE . '/' . self::WORK_ASN, $autoCreate);
     }
 
     public function getJobFinishedDir(array $job, bool $autoCreate = true): string
@@ -96,9 +130,20 @@ class JobFolders
         return $this->place($job, self::CREDIT_NOTE, $autoCreate);
     }
 
+    /**
+     * Where the credit note PDFs are read from: upload/{Job folder}/cn/pdf
+     */
     public function getJobCnUploadDir(array $job, bool $autoCreate = true): string
     {
-        return $this->place($job, self::CREDIT_NOTE . '/' . self::UPLOAD_DIR, $autoCreate);
+        return $this->workPlace($job, self::WORK_CN . '/' . self::WORK_PDF, $autoCreate);
+    }
+
+    /**
+     * Where the credit note ASN files are read from: upload/{Job folder}/cn/asn
+     */
+    public function getJobCnAsnDir(array $job, bool $autoCreate = true): string
+    {
+        return $this->workPlace($job, self::WORK_CN . '/' . self::WORK_ASN, $autoCreate);
     }
 
     public function getJobCnFinishedDir(array $job, bool $autoCreate = true): string
@@ -111,9 +156,12 @@ class JobFolders
         return $this->place($job, self::VBRP, $autoCreate);
     }
 
+    /**
+     * Where the VBRP Excel files are read from: upload/{Job folder}/invoice/vbrp
+     */
     public function getJobVbrpUploadDir(array $job, bool $autoCreate = true): string
     {
-        return $this->place($job, self::VBRP . '/' . self::UPLOAD_DIR, $autoCreate);
+        return $this->workPlace($job, self::WORK_INVOICE . '/' . self::WORK_VBRP, $autoCreate);
     }
 
     public function getJobVbrpFinishedDir(array $job, bool $autoCreate = true): string
@@ -127,12 +175,78 @@ class JobFolders
     }
 
     /**
-     * A folder of myfile/ as the pages show it: myfile/{Job folder}/TAX INVOICE/upload here
+     * upload/{Job folder}/: same folder name as in myfile/, holds invoice (pdf, asn, vbrp) and cn (pdf, asn).
+     * Deleting the Job leaves it, with the files in it, as it is.
+     */
+    public function getJobWorkDir(array $job, bool $autoCreate = true): string
+    {
+        return $this->workPlace($job, '', $autoCreate);
+    }
+
+    public function getJobWorkInvoiceDir(array $job, bool $autoCreate = true): string
+    {
+        return $this->workPlace($job, self::WORK_INVOICE, $autoCreate);
+    }
+
+    public function getJobWorkCnDir(array $job, bool $autoCreate = true): string
+    {
+        return $this->workPlace($job, self::WORK_CN, $autoCreate);
+    }
+
+    /**
+     * Creates upload/{Job folder}/ with every folder of WORK_LAYOUT; one already there is left as it is
+     */
+    public function createJobWorkFolders(array $job): void
+    {
+        $this->createWorkLayout($this->workDirOf($this->getJobFolderName($job)));
+    }
+
+    private function createWorkLayout(string $workDir): void
+    {
+        foreach (self::WORK_LAYOUT as $side => $parts) {
+            foreach ($parts as $part) {
+                $dir = $workDir . DIRECTORY_SEPARATOR . $side . DIRECTORY_SEPARATOR . $part;
+                if (!is_dir($dir)) {
+                    @mkdir($dir, 0777, true);
+                }
+            }
+        }
+    }
+
+    private function workDirOf(string $folderName): string
+    {
+        return Config::getUploadPath() . DIRECTORY_SEPARATOR . $folderName;
+    }
+
+    /**
+     * @param string $sub a folder of upload/{Job folder}/, parts joined with /, or '' for that folder itself
+     */
+    private function workPlace(array $job, string $sub, bool $autoCreate): string
+    {
+        $this->migrate($this->getJobFolderDir($job, false));
+        $dir = $this->workDirOf($this->getJobFolderName($job));
+        if ($sub !== '') {
+            $dir .= DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $sub);
+        }
+        if ($autoCreate && !is_dir($dir)) {
+            @mkdir($dir, 0777, true);
+        }
+        return $dir;
+    }
+
+    /**
+     * A folder of myfile/ or upload/ as the pages show it: myfile/{Job folder}/TAX INVOICE/finished,
+     * upload/{Job folder}/invoice/pdf
      */
     public static function displayPath(string $dir): string
     {
-        $root = Config::getMyfilePath();
-        $inside = strpos($dir, $root) === 0 ? 'myfile' . substr($dir, strlen($root)) : $dir;
+        $inside = $dir;
+        foreach (['myfile' => Config::getMyfilePath(), 'upload' => Config::getUploadPath()] as $name => $root) {
+            if ($dir === $root || strpos($dir, $root . DIRECTORY_SEPARATOR) === 0) {
+                $inside = $name . substr($dir, strlen($root));
+                break;
+            }
+        }
         return str_replace('\\', '/', $inside);
     }
 
@@ -173,7 +287,7 @@ class JobFolders
      */
     private function migrate(string $jobDir): void
     {
-        if (isset(self::$migrated[$jobDir])) {
+        if (isset(self::$migrated[$jobDir]) || !is_dir($jobDir)) {
             return;
         }
         self::$migrated[$jobDir] = true;
@@ -181,6 +295,40 @@ class JobFolders
             $old = $this->legacyEntry($jobDir, $legacy);
             if ($old !== null) {
                 $this->moveInto($jobDir . DIRECTORY_SEPARATOR . $old, $jobDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $new));
+            }
+        }
+        $this->moveWaitingFiles($jobDir);
+    }
+
+    /**
+     * Gives the Job its upload/{Job folder}/ and moves the files still waiting in the "upload here" folders of
+     * myfile/ there: Tax Invoice PDFs to invoice/pdf, credit note PDFs to cn/pdf, VBRP files to invoice/vbrp. A file
+     * whose name the new folder already holds stays where it was; an emptied "upload here" goes.
+     */
+    private function moveWaitingFiles(string $jobDir): void
+    {
+        $workDir = $this->workDirOf(basename($jobDir));
+        $this->createWorkLayout($workDir);
+        $invoicePdf = self::WORK_INVOICE . '/' . self::WORK_PDF;
+        $cnPdf = self::WORK_CN . '/' . self::WORK_PDF;
+        $sources = [
+            self::TAX_INVOICE . '/' . self::UPLOAD_DIR => $invoicePdf,
+            self::CREDIT_NOTE . '/' . self::UPLOAD_DIR => $cnPdf,
+            self::VBRP . '/' . self::UPLOAD_DIR => self::WORK_INVOICE . '/' . self::WORK_VBRP,
+        ];
+        // An old part the move above could not rename (a file inside was open) still holds its own "upload here"
+        $oldUpload = $this->legacyEntry($jobDir, self::UPLOAD_DIR);
+        if ($oldUpload !== null) {
+            $sources[$oldUpload] = $invoicePdf;
+        }
+        $oldCn = $this->legacyEntry($jobDir, 'credit note');
+        if ($oldCn !== null) {
+            $sources[$oldCn . '/' . self::UPLOAD_DIR] = $cnPdf;
+        }
+        foreach ($sources as $from => $to) {
+            $src = $jobDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $from);
+            if (is_dir($src)) {
+                $this->moveInto($src, $workDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $to));
             }
         }
     }
@@ -277,9 +425,8 @@ class JobFolders
     }
 
     /**
-     * Files still waiting in the Tax Invoice "upload here" are the user's unprocessed input, so the folder stays
-     * and only the processed "finished" files go. The CREDIT NOTE folder belongs to the credit note system, which
-     * has its own clear button, so it keeps the folder too.
+     * Printed files and the CREDIT NOTE and VBRP folders (each system has its own clear button) keep the Job folder,
+     * and only the processed "finished" files go. upload/{Job folder}/ is never touched.
      */
     public function removeProcessedJobFolder(array $job): void
     {
@@ -288,7 +435,7 @@ class JobFolders
             return;
         }
 
-        if (FileManager::containsFiles($this->getJobUploadDir($job, false)) || FileManager::containsFiles($this->getJobPrintDir($job, false))
+        if (FileManager::containsFiles($this->getJobPrintDir($job, false))
             || FileManager::containsFiles($this->getJobCreditNoteDir($job, false)) || FileManager::containsFiles($this->getJobVbrpDir($job, false))) {
             $this->deleteDirectoryRecursive($this->getJobFinishedDir($job, false));
             return;

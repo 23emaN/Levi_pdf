@@ -35,8 +35,9 @@ if (!$jobManager->jobFolderExists($job)) {
 
 $asnStep = $jobManager->initialAsnStep($job);
 $pendingFixCount = $asnStep === 'fix' ? (int)$job['asn_pending_fix_count'] : 0;
-$uploadDir = $jobManager->getJobUploadDir($job, false);
-$uploadCount = is_dir($uploadDir) ? count(FileManager::getPdfFiles($uploadDir)) : 0;
+$uploadCount = $jobManager->waitingCount($jobId, 'pdf');
+$uploadFolderText = JobFolders::displayPath($jobManager->getJobUploadDir($job)) . '/';
+$asnFolderText = JobFolders::displayPath($jobManager->getJobAsnDir($job)) . '/';
 $statusCounts = $jobManager->statusCounts($jobId);
 
 function renderPdfEmptyPlaceholderRows(int $rowCount = 18): string {
@@ -156,9 +157,9 @@ function renderReconEmptyPlaceholderRows(int $rowCount = 18): string {
             <span class="header-title">
                 <i class="fa-solid fa-folder text-warning me-1"></i> <?= htmlspecialchars($job['name']) ?>
             </span>
-            <span class="header-file-pill folder-link" title="คลิกเพื่อเปิดโฟลเดอร์ upload here ใน Explorer" onclick="openJobFolder('upload')">
+            <span class="header-file-pill folder-link" title="คลิกเพื่อเปิดโฟลเดอร์ <?= htmlspecialchars($uploadFolderText) ?> ใน Explorer (นับเฉพาะไฟล์ที่ยังไม่ได้ดึงข้อมูล)" onclick="openJobFolder('upload')">
                 <i class="fa-regular fa-folder-open me-1 text-primary"></i>
-                upload here/ (<strong id="stat-myfile" class="tabular-num text-dark"><?= number_format($uploadCount) ?></strong> ไฟล์)
+                invoice/pdf/ (ใหม่ <strong id="stat-myfile" class="tabular-num text-dark"><?= number_format($uploadCount) ?></strong> ไฟล์)
             </span>
         </div>
 
@@ -188,7 +189,7 @@ function renderReconEmptyPlaceholderRows(int $rowCount = 18): string {
         <div class="app-toolbar toolbar-stacked">
             <div class="toolbar-row">
                 <button class="btn btn-sm px-3 btn-tb btn-tb-accent btn-step-extract" id="btn-start">
-                    <i class="fa-solid fa-play me-1"></i> ดึงข้อมูลจาก upload here
+                    <i class="fa-solid fa-play me-1"></i> ดึงข้อมูลจากโฟลเดอร์ invoice/pdf
                 </button>
                 <button class="btn btn-outline-danger btn-sm" id="btn-stop" style="display:none;">
                     <i class="fa-solid fa-stop me-1"></i> หยุด
@@ -262,6 +263,9 @@ function renderReconEmptyPlaceholderRows(int $rowCount = 18): string {
         <!-- Toolbar Ribbon -->
         <div class="app-toolbar toolbar-stacked">
             <div class="toolbar-row">
+                <button class="btn btn-sm px-3 btn-tb btn-tb-green btn-step-select" id="btn-asn-folder" onclick="handleAsnFolderRead()" title="อ่านไฟล์ ASN ที่วางไว้ใน <?= htmlspecialchars($asnFolderText) ?>">
+                    <i class="fa-regular fa-folder-open me-1"></i> อ่านจากโฟลเดอร์ asn
+                </button>
                 <input type="file" id="asnFileInput" accept=".xlsx, .xls" multiple class="d-none" onchange="handleAsnFileSelect(event)">
                 <button class="btn btn-sm px-3 btn-tb btn-tb-green btn-step-select" onclick="document.getElementById('asnFileInput').click()">
                     <i class="fa-solid fa-file-circle-plus me-1"></i> เลือกไฟล์ ASN เพิ่ม (.xlsx)
@@ -591,7 +595,7 @@ function renderReconEmptyPlaceholderRows(int $rowCount = 18): string {
         <div class="modal-content border-0 shadow">
             <div class="modal-header border-bottom pb-3 bg-light">
                 <h5 class="modal-title fw-bold text-dark">
-                    <i class="fa-solid fa-copy text-primary me-2"></i>ตรวจสอบไฟล์ใน upload here
+                    <i class="fa-solid fa-copy text-primary me-2"></i>ตรวจสอบไฟล์ในโฟลเดอร์ invoice/pdf
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -599,7 +603,7 @@ function renderReconEmptyPlaceholderRows(int $rowCount = 18): string {
                 <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
                     <i class="fa-solid fa-folder-open text-primary fs-3"></i>
                     <div>
-                        <div>ตรวจพบไฟล์ PDF ใน upload here ทั้งหมด: <strong class="tabular-num" id="scanTotalFiles">0</strong> ไฟล์</div>
+                        <div>ตรวจพบไฟล์ PDF ในโฟลเดอร์ invoice/pdf ทั้งหมด: <strong class="tabular-num" id="scanTotalFiles">0</strong> ไฟล์</div>
                         <div class="text-muted small">ระบบตรวจพบว่าใน Job นี้มีไฟล์ที่เคยดึงแล้วบางส่วน</div>
                     </div>
                 </div>
@@ -783,7 +787,7 @@ function renderReconEmptyPlaceholderRows(int $rowCount = 18): string {
                         <i class="fa-solid fa-folder-open text-warning fs-3" id="noticeModalBodyIcon"></i>
                     </div>
                     <div class="flex-grow-1">
-                        <div class="fw-bold text-dark fs-6 mb-1" id="noticeModalMessage">ไม่พบไฟล์ PDF ในโฟลเดอร์ upload here</div>
+                        <div class="fw-bold text-dark fs-6 mb-1" id="noticeModalMessage">ไม่พบไฟล์ PDF ในโฟลเดอร์ invoice/pdf</div>
                         <div class="text-secondary small" id="noticeModalDetail" style="white-space: pre-wrap; word-break: break-all;"></div>
                     </div>
                 </div>

@@ -38,11 +38,11 @@ SQLite data/app.sqlite และโฟลเดอร์ myfile/
 | `CoverSheet` | ใบปะหน้า: Tax Invoice ที่ `BillStatus::canPrint` และใบลดหนี้ `MATCH` ของ Job จัดกลุ่มตามสาขา (`group`) แบ่งหน้า (`pages` static ไม่มี SQL) ค่าส่วนหัวในตาราง `cover_settings` (สร้างเองใน constructor) ไฟล์ใน `COVER SHEET/` | `JobManager`, `AsnReconciler`, `CreditNoteCompare`, `StoreNames`, `CoverSheetPdf` |
 | `CoverSheetPdf` | วาดหน้าของ `CoverSheet::pages` บนแบบฟอร์ม `assets/cover/form.jpg` ด้วยฟอนต์ Sarabun (`assets/cover/font`, cp874) | `setasign/fpdf` |
 | `StoreNames` | รหัสสาขาเป็นชื่อสาขา จาก `assets/cover/store_names.json` (75 สาขาจากใบปะหน้าตัวอย่าง March 2026) และบรรทัดร้านของใบลดหนี้ | ไม่มี |
-| `JobFolders` | โฟลเดอร์ของ Job ใน `myfile/` (`TAX INVOICE/` กับ `upload here`, `finished`, `print` และ `CREDIT NOTE/` กับ `upload here`, `finished`) และชื่อรอบ `print ครั้งที่ N` class เดียวที่รู้ชื่อโฟลเดอร์ ย้าย Job ที่สร้างก่อนแยกโฟลเดอร์ (ดูหัวข้อ "โฟลเดอร์ของ Job") และแปลงที่อยู่เป็นข้อความที่หน้าเว็บแสดง (`displayPath`) ชื่อโฟลเดอร์ Job มาจากชื่อและเลขของ Job เท่านั้น ไม่มี SQL | `Config`, `FileManager` |
+| `JobFolders` | โฟลเดอร์ของ Job: `upload/{Job}/` ที่ผู้ใช้วางไฟล์ (`invoice/` กับ `pdf`, `asn`, `vbrp` และ `cn/` กับ `pdf`, `asn`) และ `myfile/{Job}/` ที่โปรแกรมเขียน (`TAX INVOICE/` กับ `finished`, `print` และ `CREDIT NOTE/` กับ `finished`) และชื่อรอบ `print ครั้งที่ N` class เดียวที่รู้ชื่อโฟลเดอร์ ย้าย Job ที่สร้างก่อนแยกโฟลเดอร์ (ดูหัวข้อ "โฟลเดอร์ของ Job") และแปลงที่อยู่เป็นข้อความที่หน้าเว็บแสดง (`displayPath`) ชื่อโฟลเดอร์ Job มาจากชื่อและเลขของ Job เท่านั้น ไม่มี SQL | `Config`, `FileManager` |
 | `JobRepository` | ตาราง `jobs`: แถวของ Job ตัวเลขสรุป ชื่อไฟล์ ASN และค่าว่าเทียบแล้วหรือยัง | `JobFolders`, `FileManager` |
-| `PdfItemStore` | ตาราง `job_files` และ `job_items` (แถว PDF), สแกน `upload here` หาไฟล์ใหม่และบิลซ้ำ, ลบบันทึกการแก้ไขพร้อมแถว PDF ของบิล | `JobFolders`, `JobRepository`, `FileManager`, `PdfExtractor` |
+| `PdfItemStore` | ตาราง `job_files` และ `job_items` (แถว PDF), สแกน `upload/{Job}/invoice/pdf` หาไฟล์ใหม่และบิลซ้ำ, นับไฟล์ที่ยังไม่อ่าน (`waitingCount`), ลบบันทึกการแก้ไขพร้อมแถว PDF ของบิล | `JobFolders`, `JobRepository`, `FileManager`, `PdfExtractor` |
 | `AsnStore` | ตาราง `job_asn_records` (แถว ASN): นำเข้า ไฟล์ ASN ซ้ำ ลบ นับ | `JobRepository` |
-| `CreditNoteStore` | ตาราง `job_cn_files`, `job_cn_docs` (ใบลดหนี้ หนึ่งแถวต่อใบ) และ `job_cn_items` (บรรทัดสินค้าของใบ): สแกน `CREDIT NOTE/upload here` หาไฟล์ใหม่และใบลดหนี้ซ้ำ (`PdfExtractor::extractCnDocuments`) ดึงข้อมูลด้วย `CreditNoteReader::read` และย้ายไฟล์ไป `CREDIT NOTE/finished` ล้าง นับ ส่งใบพร้อมบรรทัดสินค้าให้การเทียบ (`docsWithItems`) | `JobFolders`, `JobRepository`, `FileManager`, `PdfExtractor`, `CreditNoteReader` |
+| `CreditNoteStore` | ตาราง `job_cn_files`, `job_cn_docs` (ใบลดหนี้ หนึ่งแถวต่อใบ) และ `job_cn_items` (บรรทัดสินค้าของใบ): สแกน `upload/{Job}/cn/pdf` หาไฟล์ใหม่และใบลดหนี้ซ้ำ (`PdfExtractor::extractCnDocuments`) ดึงข้อมูลด้วย `CreditNoteReader::read` และคัดลอกไฟล์ไป `CREDIT NOTE/finished` ล้าง นับ ส่งใบพร้อมบรรทัดสินค้าให้การเทียบ (`docsWithItems`) | `JobFolders`, `JobRepository`, `FileManager`, `PdfExtractor`, `CreditNoteReader` |
 | `CreditNoteAsnStore` | ตาราง `job_cn_asn_records` (แถว ASN ของการเทียบใบลดหนี้ แยกจาก `job_asn_records`) และ `job_cn_state` (ว่าเทียบใบลดหนี้ของ Job แล้วหรือยัง): นำเข้าทีละชีต ชีตเดิมซ้ำ เลขใบลดหนี้ซ้ำกับชีตอื่น ลบ นับ ชื่อที่หน้าเว็บแสดง ไม่แตะตาราง `jobs` | ไม่มี |
 | `CreditNoteReconciler` | ตัดสินใบลดหนี้กับแถว ASN (method static ไม่มี SQL ไม่มีสถานะ): แถวของแท็บ 2 สรุป และหนึ่งคำตัดสินต่อใบให้แท็บ 3 | `DashboardBuilder::invoiceKey` |
 | `CreditNoteCompare` | งานของแท็บ 2 และ 3 ของหน้าใบลดหนี้ แต่ละ method ตอบสิ่งที่ action `job_cn_*` ของมันส่ง (นำเข้า ASN ถามซ้ำ แถว ASN ลบ เทียบ ภาพรวม) | `CreditNoteAsnStore`, `CreditNoteStore`, `CreditNoteReconciler`, `JobRepository` |
@@ -135,7 +135,9 @@ class อื่นยังมี SQL ของตัวเองกับตา
 | `job_cn_delete_asn` | `credit-note/compare.js` | `CreditNoteCompare::deleteAsn` |
 | `job_cn_reconcile` | `credit-note/compare.js` | `CreditNoteCompare::reconcile` (`CreditNoteReconciler::reconcile`) |
 | `job_cn_dashboard` | `credit-note/dashboard.js` | `CreditNoteCompare::dashboard` |
-| `open_folder` | `ui-utils.js` | `FileManager::openInExplorer` (`target`: `job`, `ti`, `upload`, `finished`, `print`, `round`, `cn`, `cn_upload`, `cn_finished`, `root`; `ti` และ `cn` คือโฟลเดอร์ `TAX INVOICE` และ `CREDIT NOTE` ที่แถบล่างของ `workspace.php` และ `credit_note.php` เปิด) |
+| `job_asn_folder` | `ui-utils.js` (`asnFolderList`) | `JobManager::asnFolderFiles` (`side`: `invoice` หรือ `cn`) รายการไฟล์ Excel ใน `upload/{Job}/invoice/asn` หรือ `cn/asn` และไฟล์ไหนเคยนำเข้าแล้ว |
+| `job_asn_folder_file` | `ui-utils.js` (`asnFolderDownload`) | `JobManager::asnFolderFile` ส่งไบต์ของไฟล์หนึ่งไฟล์ในโฟลเดอร์ asn ให้เบราว์เซอร์อ่านด้วยโค้ดเดียวกับไฟล์ที่เลือกเอง ไม่รับ path นอกโฟลเดอร์นั้นหรือไฟล์ที่ไม่ใช่ Excel |
+| `open_folder` | `ui-utils.js` | `FileManager::openInExplorer` (`target`: `job`, `ti`, `upload`, `finished`, `print`, `round`, `cn`, `cn_upload`, `cn_finished`, `asn`, `cn_asn`, `vbrp_upload`, `work`, `root`; `ti` และ `cn` คือโฟลเดอร์ `TAX INVOICE` และ `CREDIT NOTE` ที่แถบล่างของ `workspace.php` และ `credit_note.php` เปิด) |
 | `print_plan`, `print_start`, `print_chunk`, `print_finish` | `workspace/print.js` | `PrintManager::plan`, `start`, `processChunk`, `finish` |
 | `cover_preview`, `cover_generate` | `cover-sheet.js` | `CoverSheet::preview`, `generate` (ไฟล์ PDF ส่งด้วย `cover_download.php` ไม่ผ่าน `api.php`) |
 | `get_stats` | `index.js`, `workspace/init.js`, `cn-error.js` | `FileManager::getPdfFiles` |
@@ -189,21 +191,28 @@ action `job_cn_*` ของแท็บ 2 และ 3 เรียก `JobManage
 ## โฟลเดอร์ของ Job
 
 ```
+upload/{ชื่อ Job}/          ผู้ใช้วางไฟล์ โปรแกรมอ่านอย่างเดียว ไม่ย้าย ไม่ลบ แม้ลบ Job
+  invoice/
+    pdf/                    PDF ใบกำกับภาษี (มีโฟลเดอร์ย่อยได้)
+    asn/                    ไฟล์ ASN (.xlsx, .xls)
+    vbrp/                   ไฟล์ VBRP (.xlsx) ของหน้า vbrp.php
+  cn/
+    pdf/                    PDF ใบลดหนี้ (มีโฟลเดอร์ย่อยได้)
+    asn/                    ไฟล์ ASN ของใบลดหนี้
 myfile/{ชื่อ Job}/
   TAX INVOICE/
-    upload here/            PDF ที่รอดึงข้อมูล (มีโฟลเดอร์ย่อยได้)
-    finished/               PDF ต้นฉบับหลังดึงข้อมูล และ {เลขบิล}.pdf ที่ปุ่มแก้ไขสร้าง
+    finished/               สำเนา PDF ที่ดึงข้อมูลแล้ว และ {เลขบิล}.pdf ที่ปุ่มแก้ไขสร้าง
     print/
       print ครั้งที่ N/
         {Dest Store No.}/   1_{เลขบิล}.pdf, 2_{เลขบิล}.pdf, ...
   CREDIT NOTE/
-    upload here/            PDF ใบลดหนี้ที่รอดึงข้อมูล (มีโฟลเดอร์ย่อยได้)
-    finished/               PDF ใบลดหนี้หลังดึงข้อมูล
+    finished/               สำเนา PDF ใบลดหนี้ที่ดึงข้อมูลแล้ว
 ```
 
-- `JobFolders` เป็น class เดียวที่รู้ชื่อเหล่านี้ (`TAX_INVOICE`, `CREDIT_NOTE`, `PRINT_ROUND_PREFIX` และ `LEGACY_PLACES`) ที่อื่นขอที่อยู่ผ่าน getter: `getJobTaxInvoiceDir`, `getJobUploadDir`, `getJobFinishedDir`, `getJobPrintDir`, `getJobPrintRoundDir`, `getJobCreditNoteDir`, `getJobCnUploadDir`, `getJobCnFinishedDir` (ทุกตัวมีชื่อเดียวกันใน `JobManager`) ข้อความโฟลเดอร์ที่หน้าเว็บแสดง (`upload_dir`, `finished_dir` ของการสแกน, `folder` ของการสั่งพิมพ์, แถบล่าง) มาจาก `JobFolders::displayPath` ของที่อยู่ที่ getter ตอบ จึงตรงกับที่อยู่จริงเสมอ
-- `createJob` สร้างทั้งห้าโฟลเดอร์ ถ้าโฟลเดอร์ใดหายไป getter ที่ `$autoCreate` เป็นจริงสร้างใหม่ การสแกนของฝั่ง Tax Invoice อ่านเฉพาะ `TAX INVOICE/upload here/` จึงไม่เห็น PDF ใบลดหนี้ และฝั่งใบลดหนี้รับเฉพาะไฟล์ใน `CREDIT NOTE/`
-- การล้างข้อมูล Tax Invoice (`JobFolders::removeProcessedJobFolder`) เก็บโฟลเดอร์ Job ไว้เมื่อ `TAX INVOICE/upload here/`, `TAX INVOICE/print/` หรือ `CREDIT NOTE/` มีไฟล์ แล้วลบเฉพาะ `TAX INVOICE/finished/` ไม่แตะ `CREDIT NOTE/` การลบ Job ลบทั้งโฟลเดอร์ Job
+- `JobFolders` เป็น class เดียวที่รู้ชื่อเหล่านี้ (`TAX_INVOICE`, `CREDIT_NOTE`, `PRINT_ROUND_PREFIX`, `WORK_LAYOUT` และ `LEGACY_PLACES`) ที่อื่นขอที่อยู่ผ่าน getter: `getJobTaxInvoiceDir`, `getJobUploadDir` (`invoice/pdf`), `getJobAsnDir`, `getJobVbrpUploadDir`, `getJobCnAsnDir`, `getJobFinishedDir`, `getJobPrintDir`, `getJobPrintRoundDir`, `getJobCreditNoteDir`, `getJobCnUploadDir`, `getJobCnFinishedDir` (ทุกตัวมีชื่อเดียวกันใน `JobManager`) ข้อความโฟลเดอร์ที่หน้าเว็บแสดง (`upload_dir`, `finished_dir` ของการสแกน, `folder` ของการสั่งพิมพ์, แถบล่าง) มาจาก `JobFolders::displayPath` ของที่อยู่ที่ getter ตอบ จึงตรงกับที่อยู่จริงเสมอ
+- `createJob` สร้าง `TAX INVOICE/finished`, `TAX INVOICE/print`, `CREDIT NOTE/finished` และ `upload/{ชื่อ Job}/` ทุกโฟลเดอร์ของ `WORK_LAYOUT` (`createJobWorkFolders`, ชื่อโฟลเดอร์ Job เดียวกับใน `myfile/`, `Config::getUploadPath`) การลบ Job ไม่ลบ `upload/{ชื่อ Job}/` (`job_folders_test.php` "deleting a Job leaves upload/<Job>/ and the files in it as they were") ถ้าโฟลเดอร์ใดหายไป getter ที่ `$autoCreate` เป็นจริงสร้างใหม่ การสแกนของฝั่ง Tax Invoice อ่านเฉพาะ `invoice/pdf/` จึงไม่เห็น PDF ใบลดหนี้ และฝั่งใบลดหนี้รับเฉพาะไฟล์ใน `cn/pdf/` และ `CREDIT NOTE/finished/`
+- ป้ายโฟลเดอร์ที่หัวของ `workspace.php`, `credit_note.php`, `vbrp.php` นับเฉพาะไฟล์ที่ชื่อยังไม่มีในตารางไฟล์ของ Job (`JobManager::waitingCount`) เพราะไฟล์ที่อ่านแล้วยังอยู่ในโฟลเดอร์
+- การล้างข้อมูล Tax Invoice (`JobFolders::removeProcessedJobFolder`) เก็บโฟลเดอร์ Job ไว้เมื่อ `TAX INVOICE/print/`, `CREDIT NOTE/` หรือ `VBRP/` มีไฟล์ ไม่แตะ `upload/` แล้วลบเฉพาะ `TAX INVOICE/finished/` ไม่แตะ `CREDIT NOTE/` การลบ Job ลบทั้งโฟลเดอร์ Job
 
 ### Job ที่สร้างก่อนแยกโฟลเดอร์ (ก่อน 2026-10-28)
 
@@ -216,9 +225,10 @@ Job เหล่านี้มี `upload here/`, `finished/`, `print/` แล�
 - `job_files.file_path` และ `job_cn_files.file_path` ไม่ถูกแก้ตอนย้าย และไม่มีโค้ดใดอ่าน: `PdfFixer::fixJob` อ่านไฟล์ต้นฉบับจาก `getJobFinishedDir` + `filename` และ `PdfItemStore::deleteJobItems` ลบไฟล์ที่ไม่เหลือแถวที่ `getJobFinishedDir` + `filename` (ดู DECISIONS.md 2026-10-28)
 - ชื่อโฟลเดอร์มาจากชื่อ Job โดยแทนอักขระที่ Windows ไม่รับด้วย `_` (`JobFolders::sanitizeFolderName`) สร้าง Job ที่ได้ชื่อโฟลเดอร์ซ้ำกับ Job ที่โฟลเดอร์ยังอยู่ไม่ได้ ถ้าโฟลเดอร์ของ Job เดิมหายไปแล้ว Job เดิมถูกลบและ Job ใหม่เริ่มว่าง (`JobManager::createJob`)
 - Job มีอยู่สำหรับผู้ใช้เมื่อโฟลเดอร์ยังอยู่ (`JobFolders::jobFolderExists`)
-- การดึงข้อมูลย้ายไฟล์ (ไม่ใช่คัดลอก) จาก `upload here` ไป `finished` และรับเฉพาะไฟล์ที่อยู่ใน `upload here` หรือ `finished` ของ Job นั้น (`FileManager::isSubpath`) ใบลดหนี้ทำแบบเดียวกันกับ `CREDIT NOTE/upload here` และ `CREDIT NOTE/finished` (`CreditNoteStore::extractBatch`)
+- การดึงข้อมูลคัดลอกไฟล์ (ไม่ย้าย) จาก `upload/{Job}/invoice/pdf` ไป `TAX INVOICE/finished` (`FileManager::copyInto`) และรับเฉพาะไฟล์ที่อยู่ในสองโฟลเดอร์นั้นของ Job (`FileManager::isSubpath`) ใบลดหนี้ทำแบบเดียวกันกับ `cn/pdf` และ `CREDIT NOTE/finished` (`CreditNoteStore::extractBatch`) และ VBRP กับ `invoice/vbrp` และ `VBRP/finished`
+- Job ที่มี `upload here` (สร้างก่อน 2026-11-11): `JobFolders::moveWaitingFiles` (ส่วนหนึ่งของ `migrate`) สร้าง `upload/{Job}/` แล้วย้ายไฟล์ใน `TAX INVOICE/upload here`, `CREDIT NOTE/upload here`, `VBRP/upload here` (และ `upload here` กับ `credit note/upload here` เก่าที่ยังย้ายไม่ได้) ไป `invoice/pdf`, `cn/pdf`, `invoice/vbrp` ด้วย `moveInto` จึงไม่เขียนทับไฟล์ชื่อซ้ำ
 
-ทดสอบ: `job_safety_test.php` "extraction moves the PDF from upload here to finished", "a path outside the job folders is not processed or moved", "a second job with the same folder name is rejected", "while the old finished folder of a Job made before the split cannot be moved…", "after the move the fix reads the master PDF from TAX INVOICE/finished…", "deleting every row of one file removes its PDF from TAX INVOICE/finished…", `job_folders_test.php` ทุก check, `credit_note_test.php` "a path outside the credit note folders, or a file in the Tax Invoice finished folder, is not read or moved", "clearing the Tax Invoice data (clear_job) keeps the credit note rows, the credit note PDFs and the Job folder", "credit notes waiting in the old "credit note" folder of a Job made before the split…"
+ทดสอบ: `job_safety_test.php` "extraction copies the PDF from upload/<Job>/invoice/pdf to finished…", "a path outside the job folders is not processed or moved", "a second job with the same folder name is rejected", "while the old finished folder of a Job made before the split cannot be moved…", "after the move the fix reads the master PDF from TAX INVOICE/finished…", "deleting every row of one file removes its PDF from TAX INVOICE/finished…", `job_folders_test.php` ทุก check, `credit_note_test.php` "a path outside the credit note folders, or a file in the Tax Invoice finished folder, is not read or moved", "clearing the Tax Invoice data (clear_job) keeps the credit note rows, the credit note PDFs and the Job folder", "credit notes waiting in the old "credit note" folder of a Job made before the split…"
 
 ## กลยุทธ์การทดสอบ
 
@@ -260,7 +270,7 @@ Job เหล่านี้มี `upload here/`, `finished/`, `print/` แล�
 - ปุ่มแก้ไขเขียนทับค่าเดิมในแถว PDF ไม่มีปุ่มย้อน การเริ่มใหม่ต้องดึงข้อมูล PDF ใหม่ และการล้างแถว PDF ทั้งหมดลบไฟล์ต้นฉบับใน `finished/` (ลำดับที่ถูกอยู่ใน BUSINESS_RULES.md หัวข้อ "เริ่มใหม่ตั้งแต่ต้น")
 - การแปลงเลขบิลเป็น key มีหลายที่: `DashboardBuilder::invoiceKey` (`CreditNoteReconciler::key` ใช้ตัวนี้กับเลขใบลดหนี้), `PdfItemStore::invoiceRoot` (สองตัวนี้เรียกผ่าน `JobManager::invoiceKey` และ `JobManager::invoiceRoot` ได้ด้วย), `FixPlan::root`, closure `getNormInv` และ `getRootInv` ใน `AsnReconciler::reconcile` (`invoiceRoot` เก็บแค่ตัวเลข ส่วน `FixPlan::root` เก็บตัวอักษรและตัวเลข)
 - ชิ้นส่วนจากรุ่นก่อน: `JobFolders::deleteJobFolders` ลบ `jobs/job_{id}` ถ้ามี, action `clear_job` ไม่มีหน้าใดเรียก
-- หน้า `vbrp.php` (`assets/js/vbrp.js`, action `job_vbrp_upload`, `job_vbrp_scan`, `job_vbrp_extract_batch`, `job_vbrp_rows` และโฟลเดอร์ `VBRP/upload here`, `VBRP/finished`) ไม่ได้ใช้แล้วตั้งแต่ 2026-10-28 แต่ยังทำงานอยู่ (check ของ `vbrp_test.php`) การนำเข้า VBRP ทำที่แท็บ 2 ของ `workspace.php` ด้วย `job_vbrp_import` ซึ่งไม่สร้างโฟลเดอร์ VBRP
+- หน้า `vbrp.php` (`assets/js/vbrp.js`, action `job_vbrp_upload`, `job_vbrp_scan`, `job_vbrp_extract_batch`, `job_vbrp_rows` และโฟลเดอร์ `upload/{Job}/invoice/vbrp`, `VBRP/finished`) ไม่ได้ใช้แล้วตั้งแต่ 2026-10-28 แต่ยังทำงานอยู่ (check ของ `vbrp_test.php`) การนำเข้า VBRP ทำที่แท็บ 2 ของ `workspace.php` ด้วย `job_vbrp_import` ซึ่งไม่สร้างโฟลเดอร์ VBRP
 - หน้าใบลดหนี้ (legacy credit-note page: `read_cn_error01.php`, `cn-error.js`, action `list_files` และ `extract_cn_batch`, ตัวนับ `invoice_count` และ `cn_count` ของ `get_stats`, `Config::getInvoicePath`, `Config::getCnPath`) สถานะยังไม่ได้ตัดสินใจ
 - กติการาคาขายติดลบและสาขาไม่ตรงยังไม่มี check เฉพาะในชุดทดสอบ
 

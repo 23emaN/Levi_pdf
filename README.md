@@ -30,7 +30,7 @@
 ชี้เว็บเซิร์ฟเวอร์ (Herd, XAMPP หรือ AppServ) ไปที่โฟลเดอร์นี้ แล้วเปิด `index.php` ในเบราว์เซอร์
 
 บน AppServ ทำตาม `วิธีติดตั้งบน AppServ.txt` (php.ini, `AllowOverride All` ใน httpd.conf) แล้วเปิด `check.php` เพื่อตรวจเวอร์ชัน PHP ส่วนขยาย สิทธิ์เขียนโฟลเดอร์ ค่าใน php.ini และว่า `data/app.sqlite` เปิดผ่านเว็บไม่ได้
-`.htaccess` ห้ามเปิด `data/`, `myfile/`, `date_edit/`, `app/`, `vendor/`, `tests/`, `docs/` ผ่านเว็บ (ต้องมี mod_rewrite ส่วน `data/.htaccess` กันฐานข้อมูลแม้ไม่มี mod_rewrite) และตั้งขนาดอัปโหลด หน่วยความจำ และเวลาเมื่อ PHP เป็น mod_php
+`.htaccess` ห้ามเปิด `data/`, `myfile/`, `upload/`, `date_edit/`, `app/`, `vendor/`, `tests/`, `docs/` ผ่านเว็บ (ต้องมี mod_rewrite ส่วน `data/.htaccess` กันฐานข้อมูลแม้ไม่มี mod_rewrite) และตั้งขนาดอัปโหลด หน่วยความจำ และเวลาเมื่อ PHP เป็น mod_php
 
 ถ้าจะลองบนเครื่องโดยไม่ใช้ Herd หรือ XAMPP ให้รันคำสั่งนี้ที่โฟลเดอร์โปรเจกต์ แล้วเปิด `http://127.0.0.1:8000/`
 
@@ -50,19 +50,19 @@ php -S 127.0.0.1:8000
 
 ## ลำดับการทำงานของ Job
 
-1. สร้าง Job ที่ `index.php` โปรแกรมสร้างโฟลเดอร์ `myfile/{ชื่อ Job}/` ที่มีโฟลเดอร์ละระบบ: `TAX INVOICE/` (`upload here`, `finished`, `print`) และ `CREDIT NOTE/` (`upload here`, `finished`) (`JobManager::createJob`) ดูหัวข้อ "โฟลเดอร์ของ Job"
-2. วางไฟล์ PDF ใน `myfile/{ชื่อ Job}/TAX INVOICE/upload here/` วางในโฟลเดอร์ย่อยก็ได้
-3. กด "ดึงข้อมูลจาก upload here" โปรแกรมอ่าน PDF ย้ายไฟล์จาก `upload here` ไป `finished` และลบโฟลเดอร์ย่อยที่ว่าง (`api.php` action `extract_job_batch`)
-4. ที่แท็บ 2 กด "เลือกไฟล์ ASN เพิ่ม (.xlsx)" แล้วกด "เลือกไฟล์ VBRP (.xlsx)" (โปรแกรมเก็บแถวตามเลขบิล ไม่เก็บไฟล์) แล้วกด "เทียบกับ PDF" ซึ่งกดได้เมื่อมีทั้ง ASN และ VBRP ผลบอกแต่ละแหล่ง (PDF, ASN, VBRP) เป็น ✓ ตรง, ✗ ไม่ตรง หรือ - และหมายเหตุสีเทาบอกว่า ASN หรือ VBRP ไม่ตรงตรงไหน ปุ่ม "ล้างข้อมูล VBRP" ลบแถว VBRP ทั้งหมด
+1. สร้าง Job ที่ `index.php` โปรแกรมสร้าง `upload/{ชื่อ Job}/` ที่ผู้ใช้วางไฟล์: `invoice/` (`pdf`, `asn`, `vbrp`) และ `cn/` (`pdf`, `asn`) และ `myfile/{ชื่อ Job}/` ที่โปรแกรมเขียน: `TAX INVOICE/` (`finished`, `print`) และ `CREDIT NOTE/` (`finished`) (`JobManager::createJob`) ดูหัวข้อ "โฟลเดอร์ของ Job"
+2. วางไฟล์ PDF ใน `upload/{ชื่อ Job}/invoice/pdf/` วางในโฟลเดอร์ย่อยก็ได้
+3. กด "ดึงข้อมูลจากโฟลเดอร์ invoice/pdf" โปรแกรมอ่าน PDF แล้วคัดลอกไป `TAX INVOICE/finished` ไฟล์ต้นฉบับอยู่ที่เดิม ไฟล์ที่เคยอ่านแล้วนับเป็น "ไฟล์ที่ซ้ำ" ในรอบถัดไป (`api.php` action `extract_job_batch`)
+4. ที่แท็บ 2 วางไฟล์ ASN ใน `upload/{ชื่อ Job}/invoice/asn/` แล้วกด "อ่านจากโฟลเดอร์ asn" (อ่านเฉพาะไฟล์ที่ยังไม่เคยนำเข้า ถ้าทุกไฟล์เคยนำเข้าแล้วจะถามก่อนอ่านใหม่ทั้งหมด) หรือกด "เลือกไฟล์ ASN เพิ่ม (.xlsx)" แล้วกด "เลือกไฟล์ VBRP (.xlsx)" (โปรแกรมเก็บแถวตามเลขบิล ไม่เก็บไฟล์) แล้วกด "เทียบกับ PDF" ซึ่งกดได้เมื่อมีทั้ง ASN และ VBRP ผลบอกแต่ละแหล่ง (PDF, ASN, VBRP) เป็น ✓ ตรง, ✗ ไม่ตรง หรือ - และหมายเหตุสีเทาบอกว่า ASN หรือ VBRP ไม่ตรงตรงไหน ปุ่ม "ล้างข้อมูล VBRP" ลบแถว VBRP ทั้งหมด
 5. กด "แก้ไข (N)" ถ้ามีบิลรอแก้ไข ไฟล์ที่แยกแล้วอยู่ใน `finished/` ชื่อ `{เลขบิล}.pdf` ไฟล์ต้นฉบับยังอยู่
 6. กด "สั่งพิมพ์" ได้รอบใหม่ใน `TAX INVOICE/print/print ครั้งที่ N/{Dest Store No.}/`
 
 งานใบลดหนี้ (ปุ่ม CREDIT NOTE ใน `job.php`):
 
-1. วางไฟล์ PDF ใบลดหนี้ใน `myfile/{ชื่อ Job}/CREDIT NOTE/upload here/` (ปุ่ม "upload here" ที่แถบเครื่องมือเปิดโฟลเดอร์นี้)
-2. กด "ดึงข้อมูลจาก upload here" โปรแกรมอ่านทีละ 10 ไฟล์ หยุดได้หลังจบชุดที่กำลังอ่าน ถ้ามีไฟล์ที่เคยดึงแล้วหรือเลขใบลดหนี้ซ้ำกับไฟล์อื่น จะถามก่อนว่าข้ามหรือแทนที่ จบแล้วบอกจำนวนที่ได้ และไฟล์ที่ข้าม ไม่ใช่ใบลดหนี้ หรืออ่านไม่สำเร็จ (ไฟล์เหล่านั้นยังอยู่ใน `upload here`)
-3. "ล้างข้อมูลใบลดหนี้" ลบแถวทั้งหมดของ Job ไฟล์ PDF ยังอยู่ใน `CREDIT NOTE/finished/` ย้ายกลับไป `CREDIT NOTE/upload here/` ถ้าต้องการอ่านใหม่
-4. ที่แท็บ 2 กด "เลือกไฟล์ ASN เพิ่ม (.xlsx)" เลือกไฟล์ ASN เดียวกับของ Tax Invoice แล้วเลือกชีตเอง ชีตที่ชื่อมี ZCR หรือ ZKR มีคำว่า "น่าจะเป็นใบลดหนี้" ต่อท้าย (ไฟล์ตัวอย่างมีสี่ชีต: `CDS ZG2T (ZCR) done`, `RBS ZG2T (ZCR) done`, `CDS ZFP3 (ZKR) done 11.10.2026`, `RBS ZFP3 (ZKR) done 13.10.2026`) นำเข้าทีละชีต ชีตถัดไปของไฟล์เดิมเลือกได้จาก "ชีตอื่นของไฟล์นี้" ที่แถบเครื่องมือ ไม่ต้องเลือกไฟล์ใหม่ เมื่อนำเข้ามากกว่าหนึ่งชีต แถบเครื่องมือเขียนแค่ `4 ชีต` ชื่อเต็มทุกชีตอยู่ใน tooltip ของป้ายนั้นและของ "ASN: 4 ชีต" ที่แถบล่าง
+1. วางไฟล์ PDF ใบลดหนี้ใน `upload/{ชื่อ Job}/cn/pdf/` (ปุ่ม "cn/pdf" ที่แถบเครื่องมือเปิดโฟลเดอร์นี้)
+2. กด "ดึงข้อมูลจากโฟลเดอร์ cn/pdf" โปรแกรมอ่านทีละ 10 ไฟล์ หยุดได้หลังจบชุดที่กำลังอ่าน ถ้ามีไฟล์ที่เคยดึงแล้วหรือเลขใบลดหนี้ซ้ำกับไฟล์อื่น จะถามก่อนว่าข้ามหรือแทนที่ จบแล้วบอกจำนวนที่ได้ และไฟล์ที่ข้าม ไม่ใช่ใบลดหนี้ หรืออ่านไม่สำเร็จ ไฟล์ที่อ่านได้ถูกคัดลอกไป `CREDIT NOTE/finished/` ไฟล์ทุกไฟล์ยังอยู่ใน `cn/pdf`
+3. "ล้างข้อมูลใบลดหนี้" ลบแถวทั้งหมดของ Job ไฟล์ต้นฉบับยังอยู่ใน `cn/pdf` กดดึงข้อมูลอีกครั้งถ้าต้องการอ่านใหม่
+4. ที่แท็บ 2 วางไฟล์ ASN ใน `upload/{ชื่อ Job}/cn/asn/` แล้วกด "อ่านจากโฟลเดอร์ asn" หรือกด "เลือกไฟล์ ASN เพิ่ม (.xlsx)" เลือกไฟล์ ASN เดียวกับของ Tax Invoice แล้วเลือกชีตเอง ชีตที่ชื่อมี ZCR หรือ ZKR มีคำว่า "น่าจะเป็นใบลดหนี้" ต่อท้าย (ไฟล์ตัวอย่างมีสี่ชีต: `CDS ZG2T (ZCR) done`, `RBS ZG2T (ZCR) done`, `CDS ZFP3 (ZKR) done 11.10.2026`, `RBS ZFP3 (ZKR) done 13.10.2026`) นำเข้าทีละชีต ชีตถัดไปของไฟล์เดิมเลือกได้จาก "ชีตอื่นของไฟล์นี้" ที่แถบเครื่องมือ ไม่ต้องเลือกไฟล์ใหม่ เมื่อนำเข้ามากกว่าหนึ่งชีต แถบเครื่องมือเขียนแค่ `4 ชีต` ชื่อเต็มทุกชีตอยู่ใน tooltip ของป้ายนั้นและของ "ASN: 4 ชีต" ที่แถบล่าง
 5. กด "เทียบกับ PDF" ผลออกเป็นรายการต่อ (เลขใบลดหนี้, บาร์โค้ด) สถานะ สมบูรณ์ หรือ ผิดพลาด ปุ่ม "ล้างข้อมูล ASN" ลบทีละชีต แท็บ 3 สรุปหนึ่งแถวต่อใบลดหนี้ของ ASN
 6. ถ้าแถบสีเหลืองใต้หัวหน้าบอกว่าใบลดหนี้ดึงข้อมูลไว้ก่อนอัปเดต กด "ดึงข้อมูลใหม่จาก finished" โปรแกรมอ่านไฟล์ใน `CREDIT NOTE/finished/` ใหม่โดยไม่ย้ายไฟล์ แล้วจึงเทียบ
 
@@ -71,26 +71,37 @@ php -S 127.0.0.1:8000
 | ที่ | มีอะไร | โค้ดที่กำหนด |
 | --- | --- | --- |
 | `data/app.sqlite` | ฐานข้อมูล SQLite ทุก Job: แถวที่อ่านจาก PDF, แถว ASN, บันทึกการแก้ไข, ใบลดหนี้และบรรทัดสินค้าของใบ, แถว ASN ของใบลดหนี้ (แยกจากของ Tax Invoice), แถว VBRP (ไม่เก็บไฟล์ VBRP) | `Database::getConnection`, `VbrpStore::createTables` |
-| `myfile/{ชื่อ Job}/TAX INVOICE/upload here/` | PDF ที่รอดึงข้อมูล | `JobFolders::getJobUploadDir` |
-| `myfile/{ชื่อ Job}/TAX INVOICE/finished/` | PDF ต้นฉบับหลังดึงข้อมูล และ PDF ที่แยกแล้ว `{เลขบิล}.pdf` | `JobFolders::getJobFinishedDir`, `PdfFixer::fixJob` |
+| `upload/{ชื่อ Job}/invoice/pdf/` | PDF ใบกำกับภาษีที่ผู้ใช้วาง โปรแกรมอ่านจากที่นี่และไม่ย้ายหรือลบ | `JobFolders::getJobUploadDir` |
+| `upload/{ชื่อ Job}/invoice/asn/` | ไฟล์ ASN (.xlsx) ที่ปุ่ม "อ่านจากโฟลเดอร์ asn" ของหน้า TAX INVOICE อ่าน | `JobFolders::getJobAsnDir`, `JobManager::asnFolderFiles` |
+| `upload/{ชื่อ Job}/invoice/vbrp/` | ไฟล์ VBRP (.xlsx) ที่หน้า `vbrp.php` อ่าน ไฟล์ที่อัปโหลดผ่านหน้านั้นก็มาอยู่ที่นี่ | `JobFolders::getJobVbrpUploadDir` |
+| `upload/{ชื่อ Job}/cn/pdf/` | PDF ใบลดหนี้ที่ผู้ใช้วาง วางในโฟลเดอร์ย่อยก็ได้ ระบบ Tax Invoice ไม่อ่านโฟลเดอร์นี้ | `JobFolders::getJobCnUploadDir` |
+| `upload/{ชื่อ Job}/cn/asn/` | ไฟล์ ASN ที่ปุ่ม "อ่านจากโฟลเดอร์ asn" ของหน้า CREDIT NOTE อ่าน | `JobFolders::getJobCnAsnDir` |
+| `myfile/{ชื่อ Job}/TAX INVOICE/finished/` | สำเนา PDF ที่ดึงข้อมูลแล้ว และ PDF ที่แยกแล้ว `{เลขบิล}.pdf` | `JobFolders::getJobFinishedDir`, `PdfFixer::fixJob` |
 | `myfile/{ชื่อ Job}/TAX INVOICE/print/` | รอบสั่งพิมพ์ `print ครั้งที่ N` | `JobFolders::getJobPrintDir`, `JobFolders::getJobPrintRoundDir`, `PrintManager` |
-| `myfile/{ชื่อ Job}/CREDIT NOTE/upload here/` | PDF ใบลดหนี้ที่รอดึงข้อมูล วางในโฟลเดอร์ย่อยก็ได้ ระบบ Tax Invoice ไม่อ่านโฟลเดอร์นี้ | `JobFolders::getJobCnUploadDir` |
-| `myfile/{ชื่อ Job}/CREDIT NOTE/finished/` | PDF ใบลดหนี้หลังดึงข้อมูล ล้างข้อมูลใบลดหนี้แล้วไฟล์ยังอยู่ | `JobFolders::getJobCnFinishedDir`, `CreditNoteStore::extractBatch` |
+| `myfile/{ชื่อ Job}/CREDIT NOTE/finished/` | สำเนา PDF ใบลดหนี้ที่ดึงข้อมูลแล้ว ล้างข้อมูลใบลดหนี้แล้วไฟล์ยังอยู่ | `JobFolders::getJobCnFinishedDir`, `CreditNoteStore::extractBatch` |
 
 ### โฟลเดอร์ของ Job
 
 ```
-myfile/{ชื่อ Job}/
+upload/{ชื่อ Job}/        ผู้ใช้วางไฟล์ โปรแกรมอ่านอย่างเดียว ลบ Job แล้วยังอยู่
+  invoice/
+    pdf/
+    asn/
+    vbrp/
+  cn/
+    pdf/
+    asn/
+myfile/{ชื่อ Job}/        โปรแกรมเขียน ลบ Job แล้วหายไปทั้งหมด
   TAX INVOICE/
-    upload here/
     finished/
     print/
   CREDIT NOTE/
-    upload here/
     finished/
 ```
 
-ในโฟลเดอร์ Job มีแค่สองโฟลเดอร์นี้ แถบล่างของหน้า TAX INVOICE แสดงและเปิด `myfile/{ชื่อ Job}/TAX INVOICE/` แถบล่างของหน้า CREDIT NOTE แสดงและเปิด `myfile/{ชื่อ Job}/CREDIT NOTE/`
+แถบล่างของหน้า TAX INVOICE แสดงและเปิด `myfile/{ชื่อ Job}/TAX INVOICE/` แถบล่างของหน้า CREDIT NOTE แสดงและเปิด `myfile/{ชื่อ Job}/CREDIT NOTE/` ป้ายโฟลเดอร์ที่หัวของหน้า (`invoice/pdf/`, `cn/pdf/`, `invoice/vbrp/`) นับเฉพาะไฟล์ที่ยังไม่เคยดึงข้อมูล
+
+Job ที่สร้างก่อนมี `upload/` ได้ `upload/{ชื่อ Job}/` ครบทุกโฟลเดอร์ครั้งแรกที่มีหน้าใดขอโฟลเดอร์ของ Job นั้น (เปิดรายการ Job ก็นับ) และไฟล์ที่ยังรออยู่ใน `upload here` เดิมย้ายไปเอง: `TAX INVOICE/upload here` ไป `invoice/pdf`, `CREDIT NOTE/upload here` ไป `cn/pdf`, `VBRP/upload here` ไป `invoice/vbrp` ไฟล์ที่ชื่อซ้ำกับไฟล์ที่มีอยู่แล้วใน `upload/` อยู่ที่เดิม ไม่ถูกเขียนทับ `upload here` ที่ว่างแล้วถูกลบ
 
 Job ที่สร้างก่อน 2026-10-28 มี `upload here`, `finished`, `print` และ `credit note` อยู่ในโฟลเดอร์ Job โดยตรง โปรแกรมย้ายให้เองครั้งแรกที่มีหน้าใดขอโฟลเดอร์ของ Job นั้น (เปิดรายการ Job ก็นับ) ด้วยการเปลี่ยนชื่อโฟลเดอร์ ไม่คัดลอก ไฟล์จึงไม่เปลี่ยนแม้แต่ไบต์เดียว `upload here`, `finished`, `print` ไปอยู่ใน `TAX INVOICE/` และ `credit note` เปลี่ยนชื่อเป็น `CREDIT NOTE`
 
@@ -100,7 +111,7 @@ Job ที่สร้างก่อน 2026-10-28 มี `upload here`, `finis
 
 Job ที่โฟลเดอร์ใน `myfile/` หายไปจะไม่แสดงในรายการ (`JobRepository::listJobs`, check ใน `job_safety_test.php` "a job whose folder was deleted is not listed")
 
-ตัวแปรสภาพแวดล้อม `PDF_READER_ROOT` เปลี่ยนที่ของ `data/` และ `myfile/` ไปโฟลเดอร์อื่น (`Config::getRootPath`) ชุดทดสอบใช้ตัวแปรนี้ จึงไม่แตะข้อมูลจริง
+ตัวแปรสภาพแวดล้อม `PDF_READER_ROOT` เปลี่ยนที่ของ `data/`, `myfile/` และ `upload/` ไปโฟลเดอร์อื่น (`Config::getRootPath`) ชุดทดสอบใช้ตัวแปรนี้ จึงไม่แตะข้อมูลจริง
 
 ## วิธีรันชุดทดสอบ
 
@@ -162,3 +173,4 @@ php tests/run_all.php
 | `docs/` | เอกสาร |
 | `data/` | ฐานข้อมูล สร้างเมื่อใช้งาน |
 | `myfile/` | โฟลเดอร์ของ Job สร้างเมื่อใช้งาน |
+| `upload/` | ไฟล์ที่ผู้ใช้วางให้แต่ละ Job (`{ชื่อ Job}/invoice/{pdf,asn,vbrp}`, `{ชื่อ Job}/cn/{pdf,asn}`) โปรแกรมอ่านอย่างเดียว ไม่ถูกลบเมื่อลบ Job |

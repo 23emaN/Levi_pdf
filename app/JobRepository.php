@@ -73,11 +73,10 @@ class JobRepository
 
         $job = $this->getJob($jobId);
 
-        $this->folders->getJobUploadDir($job);
         $this->folders->getJobFinishedDir($job);
         $this->folders->getJobPrintDir($job);
-        $this->folders->getJobCnUploadDir($job);
         $this->folders->getJobCnFinishedDir($job);
+        $this->folders->createJobWorkFolders($job);
 
         return $job;
     }

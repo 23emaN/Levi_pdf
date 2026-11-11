@@ -32,6 +32,18 @@ class CreditNoteAsnStore
     }
 
     /**
+     * The source labels of the Job's credit note ASN rows ("{file name} / {sheet}"), in import order
+     *
+     * @return string[]
+     */
+    public function sourceFiles(int $jobId): array
+    {
+        $stmt = $this->db->prepare("SELECT source_file FROM job_cn_asn_records WHERE job_id = :job_id GROUP BY source_file ORDER BY MIN(id) ASC");
+        $stmt->execute([':job_id' => $jobId]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    /**
      * The Job's ASN label the page shows: null without rows, the one source, or "N ชีต: a, b" in import order
      */
     public function label(int $jobId): ?string

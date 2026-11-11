@@ -14,6 +14,14 @@ class Config
         return self::getRootPath() . DIRECTORY_SEPARATOR . 'myfile';
     }
 
+    /**
+     * upload/ holds one folder per Job, with invoice and cn inside, for the files of the Job's work
+     */
+    public static function getUploadPath(): string
+    {
+        return self::getRootPath() . DIRECTORY_SEPARATOR . 'upload';
+    }
+
     public static function getInvoicePath(): string
     {
         return self::getRootPath() . DIRECTORY_SEPARATOR . 'invoice';

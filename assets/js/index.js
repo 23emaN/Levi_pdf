@@ -263,7 +263,7 @@ function deleteJobSummaryLines(s) {
         lines.push(`VBRP ${n(s.vbrp_rows)} แถว`);
     }
     if (s.upload_files > 0) {
-        lines.push(`ไฟล์ PDF ที่ยังรอดึงข้อมูลในโฟลเดอร์ TAX INVOICE/upload here ${n(s.upload_files)} ไฟล์`);
+        lines.push(`ไฟล์ PDF ที่ยังไม่ได้ดึงข้อมูลในโฟลเดอร์ upload/.../invoice/pdf ${n(s.upload_files)} ไฟล์ (ไม่ถูกลบ)`);
     }
     return lines;
 }

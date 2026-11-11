@@ -134,6 +134,31 @@ function isSheetHidden(workbook, sheetName) {
     return false;
 }
 
+// Reads the ASN Excel files placed in upload/{Job}/invoice/asn, the same way as files picked by hand
+async function handleAsnFolderRead() {
+    try {
+        showLoadingOverlay('กำลังตรวจโฟลเดอร์ asn...', 'upload/.../invoice/asn');
+        const chosen = await asnFolderChoose('invoice', folder => showNoticeModal(
+            'ไม่พบไฟล์ ASN ในโฟลเดอร์ asn',
+            'ยังไม่มีไฟล์ Excel สำหรับนำเข้า',
+            `กรุณานำไฟล์ ASN (.xlsx) ไปวางไว้ใน:
+${folder}
+แล้วกดปุ่ม "อ่านจากโฟลเดอร์ asn" อีกครั้ง`,
+            'warning',
+            { label: '<i class="fa-regular fa-folder-open me-1"></i> เปิดโฟลเดอร์ asn', onClick: () => openJobFolder('asn') }
+        ));
+        if (!chosen) {
+            hideLoadingOverlay();
+            return;
+        }
+        showLoadingOverlay('กำลังโหลดไฟล์ ASN...', `${chosen.length.toLocaleString()} ไฟล์จากโฟลเดอร์ asn`);
+        const files = await asnFolderDownload('invoice', chosen);
+        await handleAsnFileSelect({ target: { files, value: '' } });
+    } catch (err) {
+        showNoticeModal('เกิดข้อผิดพลาด', 'อ่านไฟล์จากโฟลเดอร์ asn ไม่สำเร็จ', err.message, 'error');
+    }
+}
+
 async function handleAsnFileSelect(event) {
     const files = Array.from(event.target.files || []);
     event.target.value = '';

@@ -140,11 +140,29 @@ function tree(string $dir): array
 }
 
 /**
- * Where a file of the old layout belongs in the new one
+ * tree() of a Job folder in myfile/ joined with tree() of its upload/ folder, whose paths start with "upload:"
+ */
+function jobTree(string $jobDir): array
+{
+    $out = tree($jobDir);
+    foreach (tree(App\Config::getUploadPath() . DIRECTORY_SEPARATOR . basename($jobDir)) as $rel => $hash) {
+        $out['upload:' . $rel] = $hash;
+    }
+    ksort($out);
+    return $out;
+}
+
+/**
+ * Where a file of the old layout belongs in the new one (waiting files go to upload/, written "upload:")
  */
 function newPlace(string $rel): string
 {
-    foreach (['upload here/' => 'TAX INVOICE/upload here/', 'finished/' => 'TAX INVOICE/finished/', 'print/' => 'TAX INVOICE/print/', 'credit note/' => 'CREDIT NOTE/'] as $old => $new) {
+    $places = [
+        'upload here/' => 'upload:invoice/pdf/', 'TAX INVOICE/upload here/' => 'upload:invoice/pdf/',
+        'credit note/upload here/' => 'upload:cn/pdf/', 'CREDIT NOTE/upload here/' => 'upload:cn/pdf/', 'VBRP/upload here/' => 'upload:invoice/vbrp/',
+        'finished/' => 'TAX INVOICE/finished/', 'print/' => 'TAX INVOICE/print/', 'credit note/' => 'CREDIT NOTE/',
+    ];
+    foreach ($places as $old => $new) {
         if (strpos($rel, $old) === 0) {
             return $new . substr($rel, strlen($old));
         }
@@ -187,42 +205,57 @@ $job = $jm->createJob('New layout');
 $jobDir = $jm->getJobFolderDir($job, false);
 $ds = DIRECTORY_SEPARATOR;
 check(
-    'a new Job folder holds exactly TAX INVOICE (upload here, finished, print) and CREDIT NOTE (upload here, finished)',
-    names($jobDir) === ['CREDIT NOTE', 'TAX INVOICE'] && names($jobDir . '/TAX INVOICE') === ['finished', 'print', 'upload here']
-        && names($jobDir . '/CREDIT NOTE') === ['finished', 'upload here'],
+    'a new Job folder in myfile/ holds exactly TAX INVOICE (finished, print) and CREDIT NOTE (finished), no upload here',
+    names($jobDir) === ['CREDIT NOTE', 'TAX INVOICE'] && names($jobDir . '/TAX INVOICE') === ['finished', 'print']
+        && names($jobDir . '/CREDIT NOTE') === ['finished'],
     json_encode([names($jobDir), names($jobDir . '/TAX INVOICE'), names($jobDir . '/CREDIT NOTE')])
 );
+$workDir = App\Config::getUploadPath() . $ds . 'New layout';
 check(
-    'the folder getters answer the places of the new layout',
-    $jm->getJobTaxInvoiceDir($job) === $jobDir . $ds . 'TAX INVOICE' && $jm->getJobUploadDir($job) === $jobDir . $ds . 'TAX INVOICE' . $ds . 'upload here'
+    'the folder getters answer the places of the new layout: the files are read from upload/<Job>/, the program writes to myfile/<Job>/',
+    $jm->getJobTaxInvoiceDir($job) === $jobDir . $ds . 'TAX INVOICE' && $jm->getJobUploadDir($job) === $workDir . $ds . 'invoice' . $ds . 'pdf'
+        && $jm->getJobAsnDir($job) === $workDir . $ds . 'invoice' . $ds . 'asn' && $jm->getJobVbrpUploadDir($job) === $workDir . $ds . 'invoice' . $ds . 'vbrp'
         && $jm->getJobFinishedDir($job) === $jobDir . $ds . 'TAX INVOICE' . $ds . 'finished' && $jm->getJobPrintDir($job) === $jobDir . $ds . 'TAX INVOICE' . $ds . 'print'
         && $jm->getJobPrintRoundDir($job, 3) === $jobDir . $ds . 'TAX INVOICE' . $ds . 'print' . $ds . 'print ครั้งที่ 3'
-        && $jm->getJobCreditNoteDir($job) === $jobDir . $ds . 'CREDIT NOTE' && $jm->getJobCnUploadDir($job) === $jobDir . $ds . 'CREDIT NOTE' . $ds . 'upload here'
-        && $jm->getJobCnFinishedDir($job) === $jobDir . $ds . 'CREDIT NOTE' . $ds . 'finished'
+        && $jm->getJobCreditNoteDir($job) === $jobDir . $ds . 'CREDIT NOTE' && $jm->getJobCnUploadDir($job) === $workDir . $ds . 'cn' . $ds . 'pdf'
+        && $jm->getJobCnAsnDir($job) === $workDir . $ds . 'cn' . $ds . 'asn' && $jm->getJobCnFinishedDir($job) === $jobDir . $ds . 'CREDIT NOTE' . $ds . 'finished'
+);
+
+check(
+    'a new Job also gets upload/<Job>/ with invoice (pdf, asn, vbrp) and cn (pdf, asn), outside myfile/',
+    names($workDir) === ['cn', 'invoice'] && names($workDir . '/invoice') === ['asn', 'pdf', 'vbrp'] && names($workDir . '/cn') === ['asn', 'pdf']
+        && $jm->getJobWorkDir($job, false) === $workDir
+        && $jm->getJobWorkInvoiceDir($job, false) === $workDir . $ds . 'invoice' && $jm->getJobWorkCnDir($job, false) === $workDir . $ds . 'cn',
+    json_encode([names($workDir), names($workDir . '/invoice'), names($workDir . '/cn')])
 );
 
 $scan = api('scan_job_files', [], ['job_id' => $job['id']]);
 $cnScan = api('job_cn_scan', [], ['job_id' => $job['id']]);
 check(
-    'the two scans name their folders as the pages show them, myfile/<Job>/TAX INVOICE/... and myfile/<Job>/CREDIT NOTE/...',
-    ($scan['data']['upload_dir'] ?? '') === 'myfile/New layout/TAX INVOICE/upload here' && ($scan['data']['finished_dir'] ?? '') === 'myfile/New layout/TAX INVOICE/finished'
-        && ($cnScan['data']['upload_dir'] ?? '') === 'myfile/New layout/CREDIT NOTE/upload here' && ($cnScan['data']['finished_dir'] ?? '') === 'myfile/New layout/CREDIT NOTE/finished',
+    'the two scans name their folders as the pages show them, upload/<Job>/invoice/pdf, upload/<Job>/cn/pdf and the finished folders of myfile/<Job>/',
+    ($scan['data']['upload_dir'] ?? '') === 'upload/New layout/invoice/pdf' && ($scan['data']['finished_dir'] ?? '') === 'myfile/New layout/TAX INVOICE/finished'
+        && ($cnScan['data']['upload_dir'] ?? '') === 'upload/New layout/cn/pdf' && ($cnScan['data']['finished_dir'] ?? '') === 'myfile/New layout/CREDIT NOTE/finished',
     json_encode([$scan['data'] ?? $scan, $cnScan['data'] ?? $cnScan], JSON_UNESCAPED_UNICODE)
 );
+
+$workOf = function (string $jobDir): string {
+    return App\Config::getUploadPath() . DIRECTORY_SEPARATOR . basename($jobDir);
+};
 
 $legacy = bareJob('Made before the split');
 put($legacy['dir'], legacyFiles());
 $before = tree($legacy['dir']);
 $answered = pathsRequest($legacy['id']);
-$after = tree($legacy['dir']);
+$after = jobTree($legacy['dir']);
 $expected = [];
 foreach (filesOnly($before) as $rel => $hash) {
     $expected[newPlace($rel)] = $hash;
 }
 ksort($expected);
 check(
-    'the first request for a Job made before the split moves upload here, finished and print into TAX INVOICE and credit note to CREDIT NOTE, every file byte for byte, print rounds and nested upload folders included',
-    filesOnly($after) === $expected && isset($after['TAX INVOICE/upload here/empty sub/']) && isset($after['TAX INVOICE/print/.tmp_0123456789ab/']),
+    'the first request for a Job made before the split moves finished and print into TAX INVOICE, credit note to CREDIT NOTE, and the waiting files of both upload here folders to upload/<Job>/invoice/pdf and cn/pdf, every file byte for byte, print rounds and nested upload folders included',
+    filesOnly($after) === $expected && isset($after['upload:invoice/pdf/empty sub/']) && isset($after['TAX INVOICE/print/.tmp_0123456789ab/'])
+        && !isset($after['TAX INVOICE/upload here/']) && !isset($after['CREDIT NOTE/upload here/']),
     json_encode(array_keys(array_diff_assoc(filesOnly($after), $expected) + array_diff_assoc($expected, filesOnly($after))), JSON_UNESCAPED_UNICODE)
 );
 check(
@@ -233,16 +266,16 @@ check(
 $dir = $legacy['dir'];
 check(
     'that request already answers with the new places',
-    $answered === ['ti' => "$dir{$ds}TAX INVOICE", 'upload' => "$dir{$ds}TAX INVOICE{$ds}upload here", 'finished' => "$dir{$ds}TAX INVOICE{$ds}finished",
-        'print' => "$dir{$ds}TAX INVOICE{$ds}print", 'cn' => "$dir{$ds}CREDIT NOTE", 'cn_upload' => "$dir{$ds}CREDIT NOTE{$ds}upload here",
+    $answered === ['ti' => "$dir{$ds}TAX INVOICE", 'upload' => $workOf($dir) . "{$ds}invoice{$ds}pdf", 'finished' => "$dir{$ds}TAX INVOICE{$ds}finished",
+        'print' => "$dir{$ds}TAX INVOICE{$ds}print", 'cn' => "$dir{$ds}CREDIT NOTE", 'cn_upload' => $workOf($dir) . "{$ds}cn{$ds}pdf",
         'cn_finished' => "$dir{$ds}CREDIT NOTE{$ds}finished"],
     json_encode($answered, JSON_UNESCAPED_UNICODE)
 );
 $again = pathsRequest($legacy['id']);
-check('a second request changes nothing and answers the same', tree($legacy['dir']) === $after && $again === $answered);
+check('a second request changes nothing and answers the same', jobTree($legacy['dir']) === $after && $again === $answered);
 $summary = api('job_delete_summary', [], ['job_id' => $legacy['id']]);
 check(
-    'the moved Job counts what it held: waiting PDFs in upload here and the printed files and rounds',
+    'the moved Job counts what it held: PDFs not read yet in upload/<Job>/invoice/pdf and the printed files and rounds',
     ($summary['data']['upload_files'] ?? null) === 2 && ($summary['data']['print_files'] ?? null) === 3 && ($summary['data']['print_rounds'] ?? null) === 2,
     json_encode($summary['data'] ?? $summary, JSON_UNESCAPED_UNICODE)
 );
@@ -251,10 +284,36 @@ $cnOnly = bareJob('Only credit notes');
 put($cnOnly['dir'], ['credit note/upload here/x.pdf' => 'x', 'credit note/finished/' => '']);
 pathsRequest($cnOnly['id']);
 check(
-    'a Job that has only the old credit note folder gets CREDIT NOTE with its file, and TAX INVOICE made on demand',
-    names($cnOnly['dir']) === ['CREDIT NOTE', 'TAX INVOICE'] && is_file($cnOnly['dir'] . '/CREDIT NOTE/upload here/x.pdf')
-        && names($cnOnly['dir'] . '/TAX INVOICE') === ['finished', 'print', 'upload here'],
-    json_encode(tree($cnOnly['dir']), JSON_UNESCAPED_UNICODE)
+    'a Job that has only the old credit note folder gets CREDIT NOTE, its waiting file in upload/<Job>/cn/pdf, and TAX INVOICE made on demand',
+    names($cnOnly['dir']) === ['CREDIT NOTE', 'TAX INVOICE'] && is_file($workOf($cnOnly['dir']) . '/cn/pdf/x.pdf')
+        && names($cnOnly['dir'] . '/TAX INVOICE') === ['finished', 'print'] && names($cnOnly['dir'] . '/CREDIT NOTE') === ['finished'],
+    json_encode(jobTree($cnOnly['dir']), JSON_UNESCAPED_UNICODE)
+);
+
+$prev = bareJob('Made with upload here');
+put($prev['dir'], [
+    'TAX INVOICE/upload here/batch/a.pdf' => 'a',
+    'TAX INVOICE/upload here/clash.pdf' => 'the waiting copy',
+    'TAX INVOICE/finished/' => '',
+    'CREDIT NOTE/upload here/c.pdf' => 'c',
+    'VBRP/upload here/v.xlsx' => 'v',
+    'VBRP/finished/' => '',
+]);
+put($workOf($prev['dir']), ['invoice/pdf/clash.pdf' => 'already in upload']);
+pathsRequest($prev['id']);
+$pw = $workOf($prev['dir']);
+check(
+    'a Job made with the upload here folders gets the whole upload/<Job>/ layout and its waiting files move there (Tax Invoice PDFs to invoice/pdf, credit notes to cn/pdf, VBRP to invoice/vbrp), subfolders kept',
+    names($pw . '/invoice') === ['asn', 'pdf', 'vbrp'] && names($pw . '/cn') === ['asn', 'pdf']
+        && is_file($pw . '/invoice/pdf/batch/a.pdf') && is_file($pw . '/cn/pdf/c.pdf') && is_file($pw . '/invoice/vbrp/v.xlsx')
+        && !is_dir($prev['dir'] . '/CREDIT NOTE/upload here') && !is_dir($prev['dir'] . '/VBRP/upload here'),
+    json_encode(jobTree($prev['dir']), JSON_UNESCAPED_UNICODE)
+);
+check(
+    'a waiting file whose name upload/<Job>/ already holds is not overwritten: both copies stay, the old one in its upload here',
+    file_get_contents($pw . '/invoice/pdf/clash.pdf') === 'already in upload'
+        && file_get_contents($prev['dir'] . '/TAX INVOICE/upload here/clash.pdf') === 'the waiting copy',
+    json_encode(jobTree($prev['dir']), JSON_UNESCAPED_UNICODE)
 );
 
 $race = bareJob('Two requests at once');
@@ -283,7 +342,7 @@ $clean = array_filter($answers, function ($a) {
 });
 check(
     'eight requests moving the same Job at the same moment all answer without an error, and the Job ends in the new layout with every file intact',
-    count($clean) === 8 && filesOnly(tree($race['dir'])) === $raceExpected && names($race['dir']) === ['CREDIT NOTE', 'TAX INVOICE'],
+    count($clean) === 8 && filesOnly(jobTree($race['dir'])) === $raceExpected && names($race['dir']) === ['CREDIT NOTE', 'TAX INVOICE'],
     json_encode([array_column($answers, 'code'), array_column($answers, 'stderr'), names($race['dir'])], JSON_UNESCAPED_UNICODE)
 );
 
@@ -325,7 +384,7 @@ if (!$windows) {
     check(
         'a print folder that cannot be moved (a file inside is open) stays where it is without an error, and the getters answer it there while the rest moves',
         ($whileLocked['print'] ?? '') === $ld . $ds . 'print' && ($whileLocked['finished'] ?? '') === $ld . $ds . 'TAX INVOICE' . $ds . 'finished'
-            && ($whileLocked['cn_upload'] ?? '') === $ld . $ds . 'CREDIT NOTE' . $ds . 'upload here'
+            && ($whileLocked['cn_upload'] ?? '') === $workOf($ld) . $ds . 'cn' . $ds . 'pdf'
             && names($ld) === ['CREDIT NOTE', 'TAX INVOICE', 'print'] && !is_dir($ld . '/TAX INVOICE/print'),
         json_encode([$whileLocked, names($ld)], JSON_UNESCAPED_UNICODE)
     );
@@ -343,7 +402,7 @@ if (!$windows) {
     $released = pathsRequest($locked['id']);
     check(
         'once the file is closed the next request moves the print folder too, every file intact',
-        names($ld) === ['CREDIT NOTE', 'TAX INVOICE'] && filesOnly(tree($ld)) === $lockedExpected && ($released['print'] ?? '') === $ld . $ds . 'TAX INVOICE' . $ds . 'print',
+        names($ld) === ['CREDIT NOTE', 'TAX INVOICE'] && filesOnly(jobTree($ld)) === $lockedExpected && ($released['print'] ?? '') === $ld . $ds . 'TAX INVOICE' . $ds . 'print',
         json_encode([names($ld), $released], JSON_UNESCAPED_UNICODE)
     );
 
@@ -354,9 +413,10 @@ if (!$windows) {
     $cnScanWhile = api('job_cn_scan', [], ['job_id' => $cnLocked['id']]);
     $cd = $cnLocked['dir'];
     check(
-        'a credit note folder that cannot be renamed keeps its name, and the credit note side reads it under that name',
-        ($cnWhile['cn_upload'] ?? '') === $cd . $ds . 'credit note' . $ds . 'upload here' && in_array('credit note', names($cd), true)
-            && array_column($cnScanWhile['data']['new_files'] ?? [], 'rel_path') === ['a.pdf'] && ($cnScanWhile['data']['upload_dir'] ?? '') === 'myfile/Locked credit note folder/credit note/upload here',
+        'a credit note folder that cannot be renamed keeps its name and the credit note side writes to it under that name, while its waiting file still moves to upload/<Job>/cn/pdf and is read there',
+        ($cnWhile['cn_upload'] ?? '') === $workOf($cd) . $ds . 'cn' . $ds . 'pdf' && ($cnWhile['cn_finished'] ?? '') === $cd . $ds . 'credit note' . $ds . 'finished'
+            && in_array('credit note', names($cd), true) && !is_dir($cd . '/credit note/upload here')
+            && array_column($cnScanWhile['data']['new_files'] ?? [], 'rel_path') === ['a.pdf'] && ($cnScanWhile['data']['upload_dir'] ?? '') === 'upload/Locked credit note folder/cn/pdf',
         json_encode([$cnWhile, names($cd), $cnScanWhile], JSON_UNESCAPED_UNICODE)
     );
     fclose($cnHandle);
@@ -376,6 +436,10 @@ $targets = [
     'cn' => $jm->getJobCreditNoteDir($open),
     'cn_upload' => $jm->getJobCnUploadDir($open),
     'cn_finished' => $jm->getJobCnFinishedDir($open),
+    'asn' => $jm->getJobAsnDir($open),
+    'cn_asn' => $jm->getJobCnAsnDir($open),
+    'vbrp_upload' => $jm->getJobVbrpUploadDir($open),
+    'work' => $jm->getJobWorkDir($open),
 ];
 if (!$windows) {
     echo "SKIP  open_folder targets (the folder is opened in Explorer, Windows only)\n";
@@ -388,7 +452,7 @@ if (!$windows) {
         }
     }
     check(
-        'open_folder opens the two system folders (ti, cn) and every older target in its new place: job, upload, finished, print, round, cn_upload, cn_finished',
+        'open_folder opens the two system folders (ti, cn), every older target in its new place (job, upload, finished, print, round, cn_upload, cn_finished, vbrp_upload) and the folders of upload/<Job>/ (work, asn, cn_asn)',
         $wrong === [] && basename($targets['ti']) === 'TAX INVOICE' && basename($targets['cn']) === 'CREDIT NOTE',
         json_encode($wrong, JSON_UNESCAPED_UNICODE)
     );
@@ -407,14 +471,49 @@ check(
     json_encode([$cleared, tree($jm->getJobFolderDir($clear, false))], JSON_UNESCAPED_UNICODE)
 );
 
+$asnJob = $jm->createJob('ASN folders');
+put($jm->getJobAsnDir($asnJob), ['ASN april.xlsx' => 'april bytes', 'more/ASN may.xlsx' => 'may bytes', 'notes.txt' => 'n', '~$ASN april.xlsx' => 'lock']);
+put($jm->getJobCnAsnDir($asnJob), ['CN ASN.xlsx' => 'cn bytes']);
+put($root, ['outside.xlsx' => 'secret']);
+$pdo->prepare("INSERT INTO job_asn_records (job_id, source_file, invoice_no, ean_upc) VALUES (?, 'ASN april.xlsx [Sheet1]', '1', '1')")->execute([$asnJob['id']]);
+$asnList = api('job_asn_folder', [], ['job_id' => $asnJob['id'], 'side' => 'invoice']);
+$cnAsnList = api('job_asn_folder', [], ['job_id' => $asnJob['id'], 'side' => 'cn']);
+check(
+    'job_asn_folder lists the Excel files of upload/<Job>/invoice/asn (subfolders included, not lock files or other types), marks the one the Job imported a sheet of, and reads cn/asn for side cn',
+    ($asnList['data']['folder'] ?? '') === 'upload/ASN folders/invoice/asn'
+        && array_map(function ($f) { return [$f['rel_path'], $f['imported']]; }, $asnList['data']['files'] ?? []) === [['ASN april.xlsx', true], ['more/ASN may.xlsx', false]]
+        && array_column($cnAsnList['data']['files'] ?? [], 'rel_path') === ['CN ASN.xlsx'] && ($cnAsnList['data']['files'][0]['imported'] ?? null) === false,
+    json_encode([$asnList, $cnAsnList], JSON_UNESCAPED_UNICODE)
+);
+$fileBytes = function (string $side, string $relPath) use ($asnJob): string {
+    $requestFile = tempnam(sys_get_temp_dir(), 'folders_req_');
+    file_put_contents($requestFile, json_encode(['action' => 'job_asn_folder_file', 'post' => [], 'get' => ['job_id' => $asnJob['id'], 'side' => $side, 'rel_path' => $relPath], 'server' => []]));
+    $out = (string)shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__FILE__) . ' --api ' . escapeshellarg($requestFile));
+    unlink($requestFile);
+    return $out;
+};
+check(
+    'job_asn_folder_file answers the bytes of a file of the asn folder, and refuses a path outside it or a file that is not Excel',
+    $fileBytes('invoice', 'more/ASN may.xlsx') === 'may bytes' && $fileBytes('cn', 'CN ASN.xlsx') === 'cn bytes'
+        && strpos($fileBytes('invoice', '../../../outside.xlsx'), 'secret') === false && strpos($fileBytes('invoice', 'notes.txt'), '"status":"error"') !== false
+        && strpos($fileBytes('cn', 'more/ASN may.xlsx'), 'may bytes') === false
+);
+
 $gone = $jm->createJob('Deleted with both systems');
 put($jm->getJobFinishedDir($gone), ['a.pdf' => 'a']);
 put($jm->getJobCnFinishedDir($gone), ['b.pdf' => 'b']);
+put($jm->getJobWorkInvoiceDir($gone, false) . '/pdf', ['kept.pdf' => 'k']);
 $deleted = api('delete_job', ['job_id' => $gone['id'], 'confirm_name' => 'Deleted with both systems']);
 check(
     'deleting a Job removes its whole folder, both systems',
     ($deleted['status'] ?? '') === 'success' && !is_dir($jm->getJobFolderDir($gone, false)),
     json_encode($deleted, JSON_UNESCAPED_UNICODE)
+);
+$goneWork = App\Config::getUploadPath() . DIRECTORY_SEPARATOR . 'Deleted with both systems';
+check(
+    'deleting a Job leaves upload/<Job>/ and the files in it as they were',
+    is_file($goneWork . '/invoice/pdf/kept.pdf') && names($goneWork . '/invoice') === ['asn', 'pdf', 'vbrp'] && names($goneWork . '/cn') === ['asn', 'pdf'],
+    json_encode([names($goneWork . '/invoice'), names($goneWork . '/cn')])
 );
 
 echo $failures ? "\n$failures FAILED\n" : "\nALL PASS\n";

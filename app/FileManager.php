@@ -62,6 +62,23 @@ class FileManager
      * @param string $dirPath
      * @return void
      */
+    /**
+     * Copies $srcPath into $dir under its own name, replacing a file of that name. The original stays where it is.
+     *
+     * @return string the copy, or $srcPath when the copy could not be made (or $srcPath already is that file)
+     */
+    public static function copyInto(string $srcPath, string $dir): string
+    {
+        $destPath = $dir . DIRECTORY_SEPARATOR . basename($srcPath);
+        if (realpath($srcPath) === realpath($destPath)) {
+            return $destPath;
+        }
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0777, true);
+        }
+        return @copy($srcPath, $destPath) ? $destPath : $srcPath;
+    }
+
     public static function cleanEmptySubdirectories(string $dirPath): void
     {
         if (!is_dir($dirPath)) {

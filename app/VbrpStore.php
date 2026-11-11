@@ -120,7 +120,7 @@ class VbrpStore
     }
 
     /**
-     * Sorts the Excel files of the VBRP "upload here" folder (subfolders included) into files whose name is
+     * Sorts the Excel files of upload/{Job}/invoice/vbrp (subfolders included) into files whose name is
      * already recorded and new files
      */
     public function scan(int $jobId): array
@@ -128,7 +128,6 @@ class VbrpStore
         $job = $this->requireJob($jobId);
         $uploadDir = $this->folders->getJobVbrpUploadDir($job);
         $finishedDir = $this->folders->getJobVbrpFinishedDir($job);
-        FileManager::cleanEmptySubdirectories($uploadDir);
         $diskFiles = FileManager::getFilesWithExtension($uploadDir, self::EXTENSIONS);
 
         $recorded = array_flip($this->recordedFilenames($jobId));
@@ -162,7 +161,7 @@ class VbrpStore
      * rows are recorded. Any existing rows in the Job whose Column C (invoice) matches an invoice of the new file
      * are deleted before the new rows are inserted.
      *
-     * @param string[] $relPaths paths inside the VBRP "upload here" folder, or file names in "finished"
+     * @param string[] $relPaths paths inside upload/{Job}/invoice/vbrp, or file names in "finished"
      */
     public function extractBatch(int $jobId, array $relPaths, bool $replaceExisting = true): array
     {
@@ -205,7 +204,7 @@ class VbrpStore
                 continue;
             }
 
-            $path = $this->moveToFinished($srcPath, $uploadDir, $finishedDir);
+            $path = FileManager::copyInto($srcPath, $finishedDir);
             $recResult = $this->record($jobId, $baseName, $path, $sheets, $finishedDir);
             if (isset($recorded[$baseName])) {
                 $replaced[] = $baseName;
@@ -222,7 +221,6 @@ class VbrpStore
             $rowCount += $total;
         }
 
-        FileManager::cleanEmptySubdirectories($uploadDir);
 
         return [
             'processed_files' => $processed,
@@ -450,7 +448,7 @@ class VbrpStore
     }
 
     /**
-     * Saves uploaded Excel files into the "upload here" folder (an upload of the same name replaces the file waiting
+     * Saves uploaded Excel files into upload/{Job}/invoice/vbrp (an upload of the same name replaces the file waiting
      * there). $files is $_FILES['files'] of a multiple file input.
      *
      * @return array ['saved' => file names, 'rejected' => [['filename', 'message']]]
@@ -472,7 +470,7 @@ class VbrpStore
             } elseif (!in_array(strtolower(pathinfo($name, PATHINFO_EXTENSION)), self::EXTENSIONS, true) || strpos($name, '~$') === 0) {
                 $rejected[] = ['filename' => $name, 'message' => 'รับเฉพาะไฟล์ Excel (.xlsx)'];
             } elseif (!is_uploaded_file($tmp) || !@move_uploaded_file($tmp, $uploadDir . DIRECTORY_SEPARATOR . $name)) {
-                $rejected[] = ['filename' => $name, 'message' => 'บันทึกไฟล์ลง upload here ไม่ได้'];
+                $rejected[] = ['filename' => $name, 'message' => 'บันทึกไฟล์ลงโฟลเดอร์ invoice/vbrp ไม่ได้'];
             } else {
                 $saved[] = $name;
             }
@@ -634,25 +632,18 @@ class VbrpStore
         return null;
     }
 
+
     /**
-     * Moves (not copies) a file into "finished" and removes the "upload here" subfolders it leaves empty
-     *
-     * @return string where the file is now
+     * Excel files of upload/{Job}/invoice/vbrp whose name the Job has not read yet (read files stay in that folder)
      */
-    private function moveToFinished(string $srcPath, string $uploadDir, string $finishedDir): string
+    public function waitingCount(int $jobId): int
     {
-        $destPath = $finishedDir . DIRECTORY_SEPARATOR . basename($srcPath);
-        if (realpath($srcPath) === realpath($destPath)) {
-            return $destPath;
+        $read = array_flip($this->recordedFilenames($jobId));
+        $count = 0;
+        foreach (FileManager::getFilesWithExtension($this->folders->getJobVbrpUploadDir($this->requireJob($jobId), false), self::EXTENSIONS) as $file) {
+            $count += isset($read[basename($file)]) ? 0 : 1;
         }
-        if (file_exists($destPath)) {
-            @unlink($destPath);
-        }
-        if (!@rename($srcPath, $destPath) && @copy($srcPath, $destPath)) {
-            @unlink($srcPath);
-        }
-        FileManager::pruneEmptyParents($srcPath, $uploadDir);
-        return file_exists($destPath) ? $destPath : $srcPath;
+        return $count;
     }
 
     private function recordedFilenames(int $jobId): array
