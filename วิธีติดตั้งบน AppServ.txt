@@ -1,0 +1,97 @@
+﻿วิธีติดตั้งโปรแกรม Levi's Billing PDF กับ ASN บน AppServ
+=========================================================
+
+สิ่งที่ต้องมี
+- Windows 10 หรือ 11
+- AppServ 9.3.0 (มี Apache 2.4 และ PHP 7.3) ดาวน์โหลดที่ https://www.appserv.org
+  ตอนติดตั้งเลือก Apache และ PHP ก็พอ (MySQL และ phpMyAdmin ไม่ต้องใช้ โปรแกรมเก็บข้อมูลใน SQLite)
+
+
+ขั้นที่ 1  วางโปรแกรม
+---------------------
+1. แตกไฟล์ zip จะได้โฟลเดอร์ pdf_reader
+2. คัดลอกโฟลเดอร์ pdf_reader ไปไว้ที่ C:\AppServ\www\
+   จะได้ C:\AppServ\www\pdf_reader\index.php
+
+
+ขั้นที่ 2  แก้ php.ini  (ทำครั้งเดียว)
+-----------------------------------
+เปิดไฟล์ C:\Windows\php.ini ด้วย Notepad (คลิกขวา Run as administrator)
+ถ้าไม่มีไฟล์นี้ ให้ดูที่ C:\AppServ\php7\php.ini
+(ที่ถูกต้องแน่นอนดูได้จากบรรทัด "ไฟล์ php.ini ที่ใช้อยู่" ในหน้า check.php ขั้นที่ 4)
+
+2.1 เปิดส่วนขยาย: หาบรรทัดต่อไปนี้ แล้วลบเครื่องหมาย ; ข้างหน้าออก
+        extension=pdo_sqlite
+        extension=fileinfo
+        extension=mbstring
+
+2.2 แก้ค่าต่อไปนี้ (หาชื่อแล้วเปลี่ยนตัวเลข)
+        upload_max_filesize = 200M
+        post_max_size = 210M
+        memory_limit = 1024M
+        max_execution_time = 600
+        max_input_time = 600
+
+2.3 บันทึกไฟล์
+
+
+ขั้นที่ 3  แก้ httpd.conf  (ทำครั้งเดียว แนะนำ)
+--------------------------------------------
+เพื่อให้ไฟล์ .htaccess ของโปรแกรมทำงาน ซึ่งกันไม่ให้คนอื่นในวง LAN เปิดฐานข้อมูลและไฟล์ PDF ผ่านเบราว์เซอร์ได้
+
+1. เปิด C:\AppServ\Apache24\conf\httpd.conf ด้วย Notepad (Run as administrator)
+2. หาบรรทัดที่ขึ้นต้นด้วย  <Directory "${SRVROOT}/../www">  หรือ  <Directory "C:/AppServ/www">
+   ภายในกลุ่มนั้น เปลี่ยน
+        AllowOverride None
+   เป็น
+        AllowOverride All
+3. หาบรรทัด
+        #LoadModule rewrite_module modules/mod_rewrite.so
+   ลบเครื่องหมาย # ข้างหน้าออก
+4. บันทึกไฟล์
+
+
+ขั้นที่ 4  Restart Apache แล้วตรวจเครื่อง
+--------------------------------------
+1. Start > AppServ > Apache Restart  (หรือ services.msc > Apache2.4 > Restart)
+2. เปิดเบราว์เซอร์ไปที่  http://localhost/pdf_reader/check.php
+3. ทุกบรรทัดควรเป็น "ผ่าน" ถ้ามี "ต้องแก้" ให้ทำตามข้อความในช่องรายละเอียด แล้ว Restart Apache อีกครั้ง
+4. กดปุ่ม "ไปหน้าโปรแกรม" หรือเปิด  http://localhost/pdf_reader/
+
+
+การใช้งาน
+---------
+- สร้าง Job ที่หน้าแรก โปรแกรมสร้างโฟลเดอร์
+      C:\AppServ\www\pdf_reader\myfile\{ชื่อ Job}\TAX INVOICE\upload here\
+      C:\AppServ\www\pdf_reader\myfile\{ชื่อ Job}\CREDIT NOTE\upload here\
+  วางไฟล์ PDF ในโฟลเดอร์ upload here แล้วกด "ดึงข้อมูลจาก upload here"
+- ปุ่มเปิดโฟลเดอร์จะเปิดหน้าต่าง Explorer บนเครื่องที่ติดตั้งโปรแกรมเท่านั้น
+  (AppServ รัน Apache เป็น Windows Service โปรแกรมจึงสั่งเปิดหน้าต่างผ่าน Task Scheduler ในชื่อผู้ใช้ที่ล็อกอินอยู่)
+  ถ้าหน้าต่างไม่เปิด โปรแกรมจะแสดงพาธให้คัดลอกไปเปิดเองใน File Explorer
+- ข้อมูลทั้งหมดอยู่ใน
+      data\app.sqlite      ฐานข้อมูล
+      myfile\              ไฟล์ PDF ของแต่ละ Job
+      date_edit\           ไฟล์ของเมนูแก้ไขวันที่ PDF
+  สำรองข้อมูลด้วยการคัดลอกสามโฟลเดอร์นี้ (ปิดหน้าโปรแกรมก่อน)
+
+
+อัปเดตโปรแกรมเวอร์ชันใหม่
+------------------------
+คัดลอกไฟล์ใหม่ทับได้ทั้งหมด ยกเว้นโฟลเดอร์ data, myfile และ date_edit ห้ามลบหรือทับ
+(zip ของโปรแกรมไม่มีข้อมูลในสามโฟลเดอร์นี้อยู่แล้ว)
+
+
+ปัญหาที่พบบ่อย
+--------------
+- หน้าเว็บขึ้น "could not find driver"
+    ยังไม่ได้เปิด extension=pdo_sqlite ใน php.ini หรือแก้ php.ini ผิดไฟล์ ดูชื่อไฟล์ที่ถูกใน check.php
+- นำเข้าไฟล์ ASN / VBRP แล้วขึ้นว่าไฟล์ใหญ่เกิน
+    แก้ upload_max_filesize และ post_max_size ในขั้นที่ 2.2 แล้ว Restart Apache
+- เปิด http://localhost/pdf_reader/ แล้วขึ้น 500 Internal Server Error หลังแก้ httpd.conf
+    ตรวจว่าพิมพ์ AllowOverride All ถูก ถ้ายังไม่หาย เปิด C:\AppServ\Apache24\logs\error.log ดูบรรทัดล่างสุด
+    หรือเปลี่ยนชื่อไฟล์ .htaccess ในโฟลเดอร์โปรแกรมชั่วคราว (โปรแกรมทำงานได้ แต่ไม่มีการป้องกันไฟล์ข้อมูล)
+- ดึงข้อมูล PDF ชุดใหญ่แล้วหยุดกลางทาง
+    เพิ่ม max_execution_time และ memory_limit ตามขั้นที่ 2.2
+- ใช้จากเครื่องอื่นในวง LAN
+    เปิด http://{IP ของเครื่องที่ติดตั้ง}/pdf_reader/  และอนุญาต Apache ใน Windows Firewall
+    ไฟล์ PDF ยังต้องวางในโฟลเดอร์ของเครื่องที่ติดตั้ง (แชร์โฟลเดอร์ myfile ผ่าน Windows ได้)

@@ -1,0 +1,38 @@
+# การตั้งค่า Apache ของโปรแกรม (AppServ / XAMPP)
+# ใช้ได้เมื่อ httpd.conf ตั้ง AllowOverride All ให้โฟลเดอร์ www ถ้าเป็น None ไฟล์นี้ถูกข้าม โปรแกรมยังทำงานได้
+# แต่ไฟล์ข้อมูลจะเปิดผ่านเว็บได้ และขนาดไฟล์อัปโหลดใช้ค่าใน php.ini (ดู check.php)
+
+Options -Indexes
+
+# ห้ามเปิดฐานข้อมูล ไฟล์ PDF ของ Job และโค้ดผ่านเบราว์เซอร์ (PHP ยังอ่านเขียนได้ตามปกติ)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(data|myfile|date_edit|app|vendor|tests|docs|scratch)(/|$) - [F,L]
+</IfModule>
+
+<FilesMatch "(\.(sqlite|sqlite-wal|sqlite-shm|md|lock|log)|^composer\.json)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# ขนาดไฟล์ (ASN / VBRP) และเวลาที่การอ่าน PDF ชุดใหญ่ต้องใช้
+# mod_php7.c = PHP 7 (AppServ 9.x), mod_php.c = PHP 8
+<IfModule mod_php7.c>
+    php_value upload_max_filesize 200M
+    php_value post_max_size 210M
+    php_value memory_limit 1024M
+    php_value max_execution_time 600
+    php_value max_input_time 600
+</IfModule>
+<IfModule mod_php.c>
+    php_value upload_max_filesize 200M
+    php_value post_max_size 210M
+    php_value memory_limit 1024M
+    php_value max_execution_time 600
+    php_value max_input_time 600
+</IfModule>

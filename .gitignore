@@ -1,0 +1,32 @@
+# Dependencies
+/vendor/
+
+# Database files
+/data/*.sqlite
+/data/*.db
+
+# Uploaded PDFs and temporary files
+/myfile/*
+!/myfile/.gitkeep
+/scratch/
+/date_edit/upload here/*
+!/date_edit/upload here/.gitkeep
+/date_edit/finished/*
+!/date_edit/finished/.gitkeep
+
+# Environment and sensitive keys
+.env
+.env.*
+*.log
+
+# OS & IDE files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Python cache
+__pycache__/
+*.pyc
+

@@ -1,0 +1,15 @@
+{
+    "require": {
+        "smalot/pdfparser": "^2.2",
+        "setasign/fpdi": "^2.6",
+        "setasign/fpdf": "^1.9"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "scripts": {
+        "test": "php tests/run_all.php"
+    }
+}
