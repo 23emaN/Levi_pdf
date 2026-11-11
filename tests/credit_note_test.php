@@ -433,7 +433,7 @@ check(
 $tables = function () use ($pdo): array {
     return $pdo->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('job_cn_files', 'job_cn_docs') ORDER BY name")->fetchAll(PDO::FETCH_COLUMN);
 };
-check('a new database starts at schema version 9 with both credit note tables', (int)$pdo->query('PRAGMA user_version')->fetchColumn() === 9 && $tables() === ['job_cn_docs', 'job_cn_files']);
+check('a new database starts at schema version 10 with both credit note tables', (int)$pdo->query('PRAGMA user_version')->fetchColumn() === 10 && $tables() === ['job_cn_docs', 'job_cn_files']);
 $jobsBefore = (int)$pdo->query('SELECT COUNT(*) FROM jobs')->fetchColumn();
 foreach (['job_cn_items', 'job_cn_asn_records', 'job_cn_state', 'job_cn_docs', 'job_cn_files'] as $table) {
     $pdo->exec("DROP TABLE {$table}");
@@ -441,8 +441,8 @@ foreach (['job_cn_items', 'job_cn_asn_records', 'job_cn_state', 'job_cn_docs', '
 $pdo->exec('PRAGMA user_version = 7');
 Database::migrateSchema($pdo);
 check(
-    'a version 7 database gains the credit note tables and moves to version 9, its Jobs kept',
-    $tables() === ['job_cn_docs', 'job_cn_files'] && (int)$pdo->query('PRAGMA user_version')->fetchColumn() === 9
+    'a version 7 database gains the credit note tables and moves to version 10, its Jobs kept',
+    $tables() === ['job_cn_docs', 'job_cn_files'] && (int)$pdo->query('PRAGMA user_version')->fetchColumn() === 10
         && (int)$pdo->query('SELECT COUNT(*) FROM jobs')->fetchColumn() === $jobsBefore
 );
 

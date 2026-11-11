@@ -1602,14 +1602,14 @@ if (is_file($singleSample)) {
     );
 }
 
-check('a new database starts at schema version 9', (int)$pdo->query('PRAGMA user_version')->fetchColumn() === 9);
+check('a new database starts at schema version 10', (int)$pdo->query('PRAGMA user_version')->fetchColumn() === 10);
 $pdo->exec('DROP TABLE job_invoice_fix_steps');
 $pdo->exec('PRAGMA user_version = 6');
 Database::migrateSchema($pdo);
 check(
-    'a version 6 database gains the fix step table and moves to version 9',
+    'a version 6 database gains the fix step table and moves to version 10',
     (int)$pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'job_invoice_fix_steps'")->fetchColumn() === 1
-        && (int)$pdo->query('PRAGMA user_version')->fetchColumn() === 9
+        && (int)$pdo->query('PRAGMA user_version')->fetchColumn() === 10
 );
 
 $stepJob = $jm->createJob('Toolbar step');

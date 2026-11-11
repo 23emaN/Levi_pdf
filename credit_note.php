@@ -14,7 +14,9 @@ if ($jobId <= 0) {
     header('Location: index.php');
     exit;
 }
-$initialTab = in_array($_GET['tab'] ?? '', ['asn', 'dashboard'], true) ? $_GET['tab'] : 'pdf';
+// The compare with the ASN (the old tab 2) is closed (user 2026-11-11): its section stays in the page, hidden, so its
+// code keeps working, but no button opens it and ?tab=asn opens tab 1
+$initialTab = in_array($_GET['tab'] ?? '', ['dashboard', 'fill'], true) ? $_GET['tab'] : 'pdf';
 
 if (!headers_sent() && isset($_SERVER['HTTP_ACCEPT_ENCODING']) && strpos($_SERVER['HTTP_ACCEPT_ENCODING'], 'gzip') !== false && PHP_SAPI !== 'cli') {
     @ob_start('ob_gzhandler');
@@ -39,6 +41,7 @@ $cnUploadCount = $jobManager->waitingCount($jobId, 'cn');
 $cnUploadFolderText = JobFolders::displayPath($jobManager->getJobCnUploadDir($job)) . '/';
 $cnAsnFolderText = JobFolders::displayPath($jobManager->getJobCnAsnDir($job)) . '/';
 $cnFinishedText = JobFolders::displayPath($jobManager->getJobCnFinishedDir($job, false)) . '/';
+$fillCounts = $jobManager->creditNoteFill()->counts($jobId);
 
 // The rule sentence itself (exact to the satang today) is added in the browser from CN_TOLERANCES, which carries
 // the tolerances CreditNoteReconciler applies (compare.js creditNoteApplyMoneyRules)
@@ -84,16 +87,36 @@ const CN_COMPARE_COLUMNS = [
     ['key' => 'remark', 'label' => 'Remark', 'type' => 'string', 'width' => 520, 'title' => 'ปัญหาที่พบ'],
 ];
 
-// One row per credit note number of the ASN (assets/js/credit-note/dashboard.js)
+// Tab 4, one row per ASN line kept by "ใส่ยอด PDF ลง ASN" (assets/js/credit-note/asn-fill.js holds the cells by key).
+// The ASN columns come from the line's own row when its sheet has them.
+const CN_FILL_COLUMNS = [
+    ['key' => '#', 'label' => '#', 'type' => 'number', 'class' => 'text-center', 'width' => 56],
+    ['key' => 'status', 'label' => 'Status', 'type' => 'number', 'class' => 'text-center', 'width' => 130],
+    ['key' => 'doc_no', 'label' => 'Credit Note No.', 'type' => 'string', 'width' => 140],
+    ['key' => 'barcode', 'label' => 'Barcode / EAN', 'type' => 'string', 'width' => 140],
+    ['key' => 'file', 'label' => 'ASN File', 'type' => 'string', 'width' => 260],
+    ['key' => 'sheet', 'label' => 'Sheet', 'type' => 'string', 'width' => 200],
+    ['key' => 'row_no', 'label' => 'Row', 'type' => 'number', 'class' => 'text-center', 'width' => 70, 'title' => 'แถวที่ในชีต Excel'],
+    ['key' => 'quantity', 'label' => 'Qty (ASN)', 'type' => 'number', 'class' => 'text-center', 'width' => 95],
+    ['key' => 'asn_cost', 'label' => 'Total Cost Ex VAT (ASN)', 'type' => 'currency', 'class' => 'text-end', 'width' => 175],
+    ['key' => 'asn_vat', 'label' => 'Total VAT (ASN)', 'type' => 'currency', 'class' => 'text-end', 'width' => 130],
+    ['key' => 'pdf_cost', 'label' => 'PDF_TOTAL_COST_EX_VAT', 'type' => 'currency', 'class' => 'text-end', 'width' => 190, 'title' => 'Total Amt Excluding VAT ของใบลดหนี้ใน PDF'],
+    ['key' => 'pdf_vat', 'label' => 'PDF_TOTAL_VAT', 'type' => 'currency', 'class' => 'text-end', 'width' => 140, 'title' => 'VAT (7%) ของใบลดหนี้ใน PDF'],
+    ['key' => 'pdf_file', 'label' => 'PDF File / Remark', 'type' => 'string', 'width' => 420, 'title' => 'ไฟล์ PDF ที่อ่านยอดมา หรือเหตุที่ไม่พบ'],
+];
+
+// One row per credit note number of the lines of tab 2 "ใส่ยอด PDF ลง ASN" (assets/js/credit-note/dashboard.js)
 const CN_DASH_COLUMNS = [
     ['key' => '#', 'label' => '#', 'type' => 'number', 'class' => 'text-center', 'width' => 44],
     ['key' => 'store_no', 'label' => 'Dest Store No.', 'type' => 'string', 'width' => 96, 'title' => 'เลขที่สาขา: Store No / Dest Store No. ในไฟล์ ASN ตารางเรียงตามสาขา แล้วตามเลขใบลดหนี้'],
     ['key' => 'doc_no', 'label' => 'Credit Note No.', 'type' => 'string', 'width' => 110, 'title' => 'เลขใบลดหนี้'],
-    ['key' => 'source_file', 'label' => 'Source File', 'type' => 'string', 'width' => 212, 'title' => 'ไฟล์ PDF ที่มีใบลดหนี้นี้'],
-    ['key' => 'units', 'label' => 'Total Qty', 'type' => 'number', 'class' => 'text-center', 'width' => 64, 'title' => 'จำนวนชิ้นรวมของใบลดหนี้ใน PDF'],
-    ['key' => 'amount', 'label' => 'Amount', 'type' => 'currency', 'class' => 'text-end', 'width' => 108, 'title' => 'ยอดเงินของใบลดหนี้ใน ASN ชีตที่มีคอลัมน์ Total Cost Ex VAT ใช้ Total Cost Ex VAT ชีตที่ไม่มี (เช่น ZG2T) ใช้ผลรวม Quantity × Unit Ret'],
-    ['key' => 'pages', 'label' => 'Pages', 'type' => 'string', 'class' => 'text-center', 'width' => 72, 'title' => 'จำนวนหน้าของใบลดหนี้ในไฟล์ PDF'],
-    ['key' => 'status', 'label' => 'Status', 'type' => 'number', 'class' => 'text-center', 'width' => 104, 'title' => 'ผลการเทียบ'],
+    ['key' => 'source_file', 'label' => 'PDF File', 'type' => 'string', 'width' => 212, 'title' => 'ไฟล์ PDF ที่อ่านยอดมา'],
+    ['key' => 'units', 'label' => 'Qty (ASN)', 'type' => 'number', 'class' => 'text-center', 'width' => 72, 'title' => 'ผลรวม Quantity ของใบลดหนี้ในไฟล์ ASN'],
+    ['key' => 'amount', 'label' => 'Cost Ex VAT (ASN)', 'type' => 'currency', 'class' => 'text-end', 'width' => 124, 'title' => 'Total Cost Ex VAT ของใบลดหนี้ในไฟล์ ASN'],
+    ['key' => 'pdf_cost', 'label' => 'PDF_TOTAL_COST_EX_VAT', 'type' => 'currency', 'class' => 'text-end', 'width' => 124, 'title' => 'Total Amt Excluding VAT ของใบลดหนี้ใน PDF'],
+    ['key' => 'pdf_vat', 'label' => 'PDF_TOTAL_VAT', 'type' => 'currency', 'class' => 'text-end', 'width' => 100, 'title' => 'VAT (7%) ของใบลดหนี้ใน PDF'],
+    ['key' => 'pages', 'label' => 'Pages', 'type' => 'string', 'class' => 'text-center', 'width' => 64, 'title' => 'จำนวนหน้าของใบลดหนี้ในไฟล์ PDF'],
+    ['key' => 'status', 'label' => 'Status', 'type' => 'number', 'class' => 'text-center', 'width' => 112, 'title' => 'พบใบลดหนี้ใน PDF หรือไม่'],
     ['key' => 'remark', 'label' => 'Remark', 'type' => 'string', 'title' => 'หมายเหตุ'],
 ];
 
@@ -182,8 +205,8 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
             <button class="header-tab-btn<?= $initialTab === 'pdf' ? ' active' : '' ?>" id="credit-note-tab-pdf" type="button" data-tab="pdf">
                 <i class="fa-solid fa-file-circle-minus cn-accent me-1"></i> 1. ดึงข้อมูลจากใบลดหนี้ (PDF)
             </button>
-            <button class="header-tab-btn<?= $initialTab === 'asn' ? ' active' : '' ?>" id="credit-note-tab-asn" type="button" data-tab="asn">
-                <i class="fa-solid fa-scale-balanced text-success me-1"></i> 2. เปรียบเทียบกับไฟล์ ASN
+            <button class="header-tab-btn<?= $initialTab === 'fill' ? ' active' : '' ?>" id="credit-note-tab-fill" type="button" data-tab="fill">
+                <i class="fa-solid fa-file-pen text-success me-1"></i> 2. ใส่ยอด PDF ลง ASN
             </button>
             <button class="header-tab-btn<?= $initialTab === 'dashboard' ? ' active' : '' ?>" id="credit-note-tab-dashboard" type="button" data-tab="dashboard">
                 <i class="fa-solid fa-chart-pie text-primary me-1"></i> 3. ภาพรวม
@@ -289,7 +312,7 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
                     <button type="button" class="recon-filter-btn" data-filter="MISMATCH" title="ข้อมูลไม่ตรงกับ ASN เช่น จำนวนไม่ตรง ยอดเงินไม่ตรง บาร์โค้ดมีฝั่งเดียว หรือไม่พบใบลดหนี้ใน PDF">
                         <i class="fa-solid fa-triangle-exclamation"></i>ผิดพลาด <span class="recon-count tabular-num" data-cn-count="MISMATCH">0</span>
                     </button>
-                    <button type="button" class="recon-filter-btn" data-filter="PENDING" title="นำเข้า ASN แล้ว ยังไม่ได้เทียบกับ PDF">
+                    <button type="button" class="recon-filter-btn" data-filter="PENDING" title="นำเข้า ASN แล้ว ยังไม่ได้ใส่ยอดจาก PDF ลงไฟล์ ASN">
                         <i class="fa-solid fa-clock"></i>รอเทียบ <span class="recon-count tabular-num" data-cn-count="PENDING">0</span>
                     </button>
                 </div>
@@ -301,9 +324,6 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
                 </div>
 
                 <div class="toolbar-end d-flex align-items-center gap-2">
-                    <button class="btn btn-sm px-3 btn-tb btn-tb-accent btn-step-compare" id="credit-note-compare" type="button"<?= $asnCounts['rows'] > 0 ? '' : ' disabled' ?>>
-                        <i class="fa-solid fa-scale-balanced me-1"></i> เทียบกับ PDF
-                    </button>
                     <button class="btn btn-sm btn-tb" id="credit-note-asn-export" type="button" disabled>
                         <i class="fa-solid fa-file-excel me-1"></i> Excel (.xlsx)
                     </button>
@@ -346,7 +366,7 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
                     <i class="fa-solid fa-circle-info" id="credit-note-dash-notice-icon"></i>
                     <span id="credit-note-dash-notice-text"></span>
                     <button type="button" class="btn btn-sm px-3 btn-tb btn-tb-accent ms-auto" id="credit-note-dash-notice-action">
-                        <i class="fa-solid fa-scale-balanced me-1"></i> ไปหน้าเปรียบเทียบ
+                        <i class="fa-solid fa-file-pen me-1"></i> ไปแท็บใส่ยอด PDF ลง ASN
                     </button>
                 </div>
 
@@ -355,7 +375,7 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
                         <span class="dash-icon" style="--tone-bg: #f1f5f9; --tone-fg: #475569;"><i class="fa-solid fa-hashtag"></i></span>
                         <div class="dash-hero-title">
                             <div class="dash-label">ใบลดหนี้ทั้งหมด</div>
-                            <div class="dash-hint">เลขใบลดหนี้ในไฟล์ ASN นับเป็นใบ ไม่ใช่จำนวนแถว ใบหนึ่งใช้สถานะของรายการที่แย่ที่สุดในใบนั้น</div>
+                            <div class="dash-hint">เลขใบลดหนี้ในไฟล์ ASN ที่นำเข้าในแท็บ 2 นับเป็นใบ ไม่ใช่จำนวนแถว</div>
                         </div>
                         <div class="dash-number dash-number-hero tabular-num" id="credit-note-dash-total">–</div>
                     </div>
@@ -365,9 +385,9 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
                         <span class="dash-seg" data-seg="error" style="--seg: #ef4444;"></span>
                     </div>
                     <ul class="dash-legend">
-                        <li><i class="dash-dot" style="--seg: #22c55e;"></i>สมบูรณ์ <b class="tabular-num" data-cn-legend="complete">–</b></li>
-                        <li><i class="dash-dot" style="--seg: var(--status-waiting-color);"></i>รอเทียบกับ PDF <b class="tabular-num" data-cn-legend="pending">–</b></li>
-                        <li><i class="dash-dot" style="--seg: #ef4444;"></i>ผิดพลาด <b class="tabular-num" data-cn-legend="error">–</b></li>
+                        <li><i class="dash-dot" style="--seg: #22c55e;"></i>พบใน PDF <b class="tabular-num" data-cn-legend="complete">–</b></li>
+                        <li><i class="dash-dot" style="--seg: var(--status-waiting-color);"></i>ยังไม่อ่านยอด <b class="tabular-num" data-cn-legend="pending">–</b></li>
+                        <li><i class="dash-dot" style="--seg: #ef4444;"></i>ไม่พบใน PDF <b class="tabular-num" data-cn-legend="error">–</b></li>
                     </ul>
                 </section>
 
@@ -375,31 +395,31 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
                     <article class="dash-panel" style="--tone-bg: #dcfce7; --tone-bd: #bbf7d0; --tone-fg: var(--status-match-color);">
                         <header class="dash-panel-head">
                             <span class="dash-icon"><i class="fa-solid fa-circle-check"></i></span>
-                            <span class="dash-label">สมบูรณ์</span>
+                            <span class="dash-label">พบใน PDF</span>
                             <span class="dash-pct tabular-num" data-cn-pct="complete">–</span>
                         </header>
                         <div class="dash-number tabular-num" id="credit-note-dash-complete">–</div>
-                        <div class="dash-hint">PDF และ ASN ตรงกันทุกรายการของใบ</div>
+                        <div class="dash-hint">ใส่ยอดจาก PDF แล้ว</div>
                     </article>
 
                     <article class="dash-panel" style="--tone-bg: #e0f2fe; --tone-bd: #bae6fd; --tone-fg: var(--status-waiting-color);">
                         <header class="dash-panel-head">
                             <span class="dash-icon"><i class="fa-solid fa-clock"></i></span>
-                            <span class="dash-label">รอเทียบกับ PDF</span>
+                            <span class="dash-label">ยังไม่อ่านยอด</span>
                             <span class="dash-pct tabular-num" data-cn-pct="pending">–</span>
                         </header>
                         <div class="dash-number tabular-num" id="credit-note-dash-pending">–</div>
-                        <div class="dash-hint">นำเข้า ASN แล้ว ยังไม่ได้กดเทียบกับ PDF</div>
+                        <div class="dash-hint">นำเข้า ASN แล้ว ยังไม่ได้กดอ่านยอดจาก PDF</div>
                     </article>
 
                     <article class="dash-panel" style="--tone-bg: #fee2e2; --tone-bd: #fecaca; --tone-fg: var(--status-mismatch-color);">
                         <header class="dash-panel-head">
                             <span class="dash-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
-                            <span class="dash-label">ผิดพลาด</span>
+                            <span class="dash-label">ไม่พบใน PDF</span>
                             <span class="dash-pct tabular-num" data-cn-pct="error">–</span>
                         </header>
                         <div class="dash-number tabular-num" id="credit-note-dash-error">–</div>
-                        <div class="dash-hint">ข้อมูลไม่ตรงกับไฟล์ ASN หรือไม่พบใบลดหนี้ใน PDF</div>
+                        <div class="dash-hint">เลขใบลดหนี้นี้ไม่มีในใบลดหนี้ PDF ที่ดึงข้อมูลไว้</div>
                     </article>
                 </div>
 
@@ -408,7 +428,7 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
                         <span class="dash-icon" style="--tone-bg: #f1f5f9; --tone-fg: #475569;"><i class="fa-solid fa-table-list"></i></span>
                         <div class="dash-hero-title">
                             <div class="dash-label">สรุปรายใบลดหนี้</div>
-                            <div class="dash-hint">1 ใบลดหนี้ 1 แถว ตามไฟล์ ASN ยอดเงินมาจาก ASN จำนวนชิ้นและจำนวนหน้ามาจากใบลดหนี้ PDF</div>
+                            <div class="dash-hint">1 ใบลดหนี้ 1 แถว ตามไฟล์ ASN ที่นำเข้าในแท็บ 2 จำนวนชิ้นและ Cost Ex VAT มาจาก ASN ยอด PDF และจำนวนหน้ามาจากใบลดหนี้ PDF</div>
                         </div>
                         <span class="dash-pct tabular-num" id="credit-note-dash-count" style="--tone-bg: #f1f5f9; --tone-bd: #e2e8f0; --tone-fg: #475569;">–</span>
                         <div class="toolbar-row dash-table-tools">
@@ -416,14 +436,14 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
                                 <button type="button" class="recon-filter-btn active" data-filter="ALL">
                                     ทั้งหมด <span class="recon-count tabular-num" data-cn-dash-count="ALL">0</span>
                                 </button>
-                                <button type="button" class="recon-filter-btn" data-filter="MATCH" title="PDF และ ASN ตรงกันทุกรายการของใบ">
-                                    <i class="fa-solid fa-circle-check"></i>สมบูรณ์ <span class="recon-count tabular-num" data-cn-dash-count="MATCH">0</span>
+                                <button type="button" class="recon-filter-btn" data-filter="MATCH" title="ใส่ยอดจาก PDF แล้ว">
+                                    <i class="fa-solid fa-circle-check"></i>พบใน PDF <span class="recon-count tabular-num" data-cn-dash-count="MATCH">0</span>
                                 </button>
-                                <button type="button" class="recon-filter-btn" data-filter="MISMATCH" title="ข้อมูลไม่ตรงกับไฟล์ ASN">
-                                    <i class="fa-solid fa-triangle-exclamation"></i>ผิดพลาด <span class="recon-count tabular-num" data-cn-dash-count="MISMATCH">0</span>
+                                <button type="button" class="recon-filter-btn" data-filter="MISMATCH" title="ไม่พบเลขใบลดหนี้นี้ใน PDF">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>ไม่พบใน PDF <span class="recon-count tabular-num" data-cn-dash-count="MISMATCH">0</span>
                                 </button>
-                                <button type="button" class="recon-filter-btn" data-filter="PENDING" title="ยังไม่ได้เทียบกับ PDF">
-                                    <i class="fa-solid fa-clock"></i>รอเทียบ <span class="recon-count tabular-num" data-cn-dash-count="PENDING">0</span>
+                                <button type="button" class="recon-filter-btn" data-filter="PENDING" title="ยังไม่ได้กดอ่านยอดจาก PDF">
+                                    <i class="fa-solid fa-clock"></i>ยังไม่อ่านยอด <span class="recon-count tabular-num" data-cn-dash-count="PENDING">0</span>
                                 </button>
                             </div>
 
@@ -453,6 +473,88 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
         </div>
     </div>
 
+    <div id="credit-note-fill-section" data-step="<?= $fillCounts['rows'] > 0 ? 'fill' : 'select' ?>" style="<?= creditNoteTabStyle('fill', $initialTab) ?>">
+        <div class="app-toolbar toolbar-stacked">
+            <div class="toolbar-row">
+                <input type="file" id="credit-note-fill-file" accept=".xlsx" class="d-none">
+                <button class="btn btn-sm px-3 btn-tb btn-tb-green btn-step-select" id="credit-note-fill-choose" type="button" title="เลือกไฟล์ ASN (.xlsx) แล้วเลือกชีตที่ต้องใช้ ระบบเก็บไฟล์และทุกคอลัมน์ของชีตลงฐานข้อมูล">
+                    <i class="fa-solid fa-file-circle-plus me-1"></i> นำเข้าไฟล์ ASN (.xlsx)
+                </button>
+
+                <span class="header-file-pill toolbar-file-pill" id="credit-note-fill-file-pill" title="ยังไม่ได้นำเข้าไฟล์ ASN">
+                    <i class="fa-regular fa-file-excel"></i>
+                    <span id="credit-note-fill-file-text">ยังไม่ได้นำเข้าไฟล์ ASN</span>
+                </span>
+
+                <button class="btn btn-sm px-3 btn-tb btn-step-compare" id="credit-note-fill-read" type="button"<?= $fillCounts['rows'] > 0 ? '' : ' disabled' ?> title="อ่าน Total Amt Excluding VAT และ VAT (7%) จากใบลดหนี้ PDF ที่ดึงข้อมูลไว้ในแท็บ 1 แล้วใส่ให้ทุกแถวที่เลขใบลดหนี้ตรงกัน">
+                    <i class="fa-solid fa-file-import me-1"></i> อ่านยอดจาก PDF
+                </button>
+
+                <button class="btn btn-sm btn-tb btn-tb-quiet toolbar-end" id="credit-note-fill-clear" type="button">
+                    <i class="fa-solid fa-rotate-left me-1"></i> ล้างข้อมูล
+                </button>
+            </div>
+
+            <div class="toolbar-row">
+                <div class="recon-filter-tabs" id="credit-note-fill-filters">
+                    <button type="button" class="recon-filter-btn active" data-filter="ALL">
+                        ทั้งหมด <span class="recon-count tabular-num" data-cn-fill-count="ALL">0</span>
+                    </button>
+                    <button type="button" class="recon-filter-btn" data-filter="MATCH" title="พบใบลดหนี้ใน PDF ใส่ยอดแล้ว">
+                        <i class="fa-solid fa-circle-check"></i>พบใน PDF <span class="recon-count tabular-num" data-cn-fill-count="MATCH">0</span>
+                    </button>
+                    <button type="button" class="recon-filter-btn" data-filter="MISMATCH" title="ไม่พบเลขใบลดหนี้นี้ใน PDF ที่ดึงข้อมูลไว้">
+                        <i class="fa-solid fa-triangle-exclamation"></i>ไม่พบใน PDF <span class="recon-count tabular-num" data-cn-fill-count="MISMATCH">0</span>
+                    </button>
+                    <button type="button" class="recon-filter-btn" data-filter="PENDING" title="นำเข้าแล้ว ยังไม่ได้กดอ่านยอดจาก PDF">
+                        <i class="fa-solid fa-clock"></i>ยังไม่อ่านยอด <span class="recon-count tabular-num" data-cn-fill-count="PENDING">0</span>
+                    </button>
+                </div>
+
+                <div class="modern-search">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                    <input type="text" class="form-control form-control-sm" id="credit-note-fill-search" placeholder="ค้นหาข้อมูลในตาราง..." autocomplete="off">
+                    <button type="button" class="btn-clear" id="credit-note-fill-clear-search" style="display: none;" aria-label="ล้างคำค้นหา"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="toolbar-end d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-tb" id="credit-note-fill-export-missing" type="button" disabled title="รายการแถวที่ไม่พบเลขใบลดหนี้ใน PDF">
+                        <i class="fa-solid fa-triangle-exclamation me-1 text-danger"></i> Export ไม่พบใน PDF
+                    </button>
+                    <button class="btn btn-sm btn-tb btn-tb-green" id="credit-note-fill-export" type="button" disabled title="ดาวน์โหลดไฟล์ ASN ต้นฉบับที่ต่อคอลัมน์ PDF_TOTAL_COST_EX_VAT และ PDF_TOTAL_VAT ท้ายชีตที่นำเข้า (ชื่อลงท้าย _PDF_Amount.xlsx)">
+                        <i class="fa-solid fa-file-excel me-1"></i> Export ASN (.xlsx)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-notice cn-fill-missing d-none" id="credit-note-fill-missing">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <div class="flex-grow-1">
+                <div><strong>ไม่พบใน PDF <span class="tabular-num" id="credit-note-fill-missing-docs">0</span> ใบ</strong> (<span class="tabular-num" id="credit-note-fill-missing-rows">0</span> แถว) เลขใบลดหนี้เหล่านี้ไม่มีในใบลดหนี้ PDF ที่ดึงข้อมูลไว้ในแท็บ 1</div>
+                <div class="cn-fill-missing-list tabular-num" id="credit-note-fill-missing-list"></div>
+            </div>
+            <button type="button" class="btn btn-sm px-3 btn-tb" id="credit-note-fill-missing-show">
+                <i class="fa-solid fa-list me-1"></i> ดูรายการ
+            </button>
+        </div>
+
+        <div class="table-container">
+            <table class="table mb-0 align-middle" id="credit-note-fill-table">
+                <thead>
+                    <tr>
+                        <?= renderCreditNoteHeader(CN_FILL_COLUMNS) ?>
+                    </tr>
+                </thead>
+                <tbody id="credit-note-fill-tbody">
+                    <?php if ($fillCounts['rows'] === 0): ?>
+                        <?= renderCreditNotePlaceholderRows(count(CN_FILL_COLUMNS)) ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <div class="app-statusbar">
         <div class="d-flex align-items-center gap-3" id="credit-note-status-counts">
             <div class="text-nowrap">
@@ -464,13 +566,13 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
                 <i class="fa-solid fa-receipt cn-accent me-1"></i>
                 ใบลดหนี้: <strong id="credit-note-docs-count" class="tabular-num text-dark"><?= number_format($cnCounts['documents']) ?></strong>
             </div>
-            <span class="text-muted">|</span>
-            <div class="text-nowrap" id="credit-note-asn-sheets-item">
+            <span class="text-muted d-none">|</span>
+            <div class="text-nowrap d-none" id="credit-note-asn-sheets-item">
                 <i class="fa-solid fa-file-excel text-success me-1"></i>
                 ASN: <strong id="credit-note-asn-sheets-count" class="tabular-num text-dark"><?= number_format($asnCounts['files']) ?></strong> ชีต
             </div>
-            <span class="text-muted">|</span>
-            <div class="text-nowrap">
+            <span class="text-muted d-none">|</span>
+            <div class="text-nowrap d-none">
                 <i class="fa-solid fa-list-check text-success me-1"></i>
                 รายการ: <strong id="credit-note-asn-rows-count" class="tabular-num text-dark"><?= number_format($asnCounts['rows']) ?></strong>
             </div>
@@ -770,6 +872,46 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
     </div>
 </div>
 
+<div class="modal fade" id="creditNoteFillImportModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-bottom py-2 px-3 bg-light d-flex align-items-center justify-content-between">
+                <h6 class="modal-title fw-bold text-dark mb-0">
+                    <i class="fa-solid fa-file-excel text-success me-2"></i>เลือกชีตที่จะนำเข้า
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="d-flex align-items-start gap-3 mb-3">
+                    <div class="cn-import-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                    <div class="flex-grow-1">
+                        <div class="fw-bold text-dark fs-6 text-break" id="creditNoteFillImportTitle"></div>
+                        <div class="text-secondary small">เลือกได้หลายชีต ระบบเก็บไฟล์ต้นฉบับและทุกคอลัมน์ของชีตที่เลือกลงฐานข้อมูล ชีตที่ไม่มีคอลัมน์เลขใบลดหนี้และบาร์โค้ดเลือกไม่ได้</div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="small text-secondary">ชีตในไฟล์</span>
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="creditNoteFillImportAll">
+                        <label class="form-check-label small" for="creditNoteFillImportAll">เลือกทุกชีตที่มีข้อมูล</label>
+                    </div>
+                </div>
+                <div class="list-group cn-fill-sheet-list mb-3" id="creditNoteFillImportList"></div>
+                <div class="fix-note d-none" id="creditNoteFillImportReplace">
+                    <i class="fa-solid fa-triangle-exclamation text-warning"></i>
+                    <span>ไฟล์ชื่อนี้เคยนำเข้าแล้ว ข้อมูลเดิมของไฟล์นี้ (ทุกชีตและยอดที่อ่านจาก PDF) จะถูกแทนที่ด้วยชีตที่เลือกตอนนี้ ชีตที่เคยนำเข้าถูกเลือกไว้ให้แล้ว</span>
+                </div>
+            </div>
+            <div class="modal-footer border-top py-2 px-3 bg-light d-flex align-items-center justify-content-end gap-2">
+                <button type="button" class="btn btn-sm px-3 btn-tb" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="button" class="btn btn-success btn-sm px-3 fw-semibold" id="creditNoteFillImportConfirm" style="border-radius: 8px;" disabled>
+                    <i class="fa-solid fa-check me-1"></i> นำเข้า <span class="tabular-num" id="creditNoteFillImportCount">0</span> ชีต
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="assets/vendor/xlsx.full.min.js?v=<?= filemtime(__DIR__ . '/assets/vendor/xlsx.full.min.js') ?>" async></script>
 <script>
@@ -778,10 +920,11 @@ function creditNoteTabStyle(string $tab, string $initialTab): string {
     const CN_COLUMNS = <?= json_encode(CREDIT_NOTE_COLUMNS, JSON_UNESCAPED_UNICODE) ?>;
     const CN_COMPARE_COLUMNS = <?= json_encode(CN_COMPARE_COLUMNS, JSON_UNESCAPED_UNICODE) ?>;
     const CN_DASH_COLUMNS = <?= json_encode(CN_DASH_COLUMNS, JSON_UNESCAPED_UNICODE) ?>;
+    const CN_FILL_COLUMNS = <?= json_encode(CN_FILL_COLUMNS, JSON_UNESCAPED_UNICODE) ?>;
     const CN_TOLERANCES = <?= json_encode(['amount' => CreditNoteReconciler::AMOUNT_TOLERANCE, 'vat' => CreditNoteReconciler::VAT_TOLERANCE]) ?>;
 </script>
 <script src="assets/js/ui-utils.js?v=<?= filemtime(__DIR__ . '/assets/js/ui-utils.js') ?>"></script>
-<?php foreach (['table', 'extraction', 'asn-sheets', 'compare-table', 'compare', 'dashboard', 'page'] as $module): ?>
+<?php foreach (['table', 'extraction', 'asn-sheets', 'compare-table', 'compare', 'asn-fill', 'dashboard', 'page'] as $module): ?>
 <script src="assets/js/credit-note/<?= $module ?>.js?v=<?= filemtime(__DIR__ . '/assets/js/credit-note/' . $module . '.js') ?>"></script>
 <?php endforeach; ?>
 <script src="assets/js/workspace/column-highlight.js?v=<?= filemtime(__DIR__ . '/assets/js/workspace/column-highlight.js') ?>"></script>

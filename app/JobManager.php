@@ -28,6 +28,9 @@ class JobManager
     /** @var CreditNoteCompare */
     private $creditNoteCompare;
 
+    /** @var CreditNoteAsnFill */
+    private $creditNoteFill;
+
     /** @var VbrpStore */
     private $vbrp;
 
@@ -48,6 +51,7 @@ class JobManager
         $this->creditNotes = new CreditNoteStore($db, $this->folders, $this->jobs);
         $this->creditNoteAsn = new CreditNoteAsnStore($db);
         $this->creditNoteCompare = new CreditNoteCompare($this->creditNoteAsn, $this->creditNotes, $this->jobs);
+        $this->creditNoteFill = new CreditNoteAsnFill($db, $this->folders, $this->jobs, $this->creditNotes);
         $this->vbrp = new VbrpStore($db, $this->folders, $this->jobs);
     }
 
@@ -399,6 +403,11 @@ class JobManager
     public function creditNoteCompare(): CreditNoteCompare
     {
         return $this->creditNoteCompare;
+    }
+
+    public function creditNoteFill(): CreditNoteAsnFill
+    {
+        return $this->creditNoteFill;
     }
 
     /**

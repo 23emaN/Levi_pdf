@@ -44,6 +44,7 @@ class JobFolders
     ];
 
     private const UPLOAD_DIR = 'upload here';
+    private const CN_FILL_DIR = 'ASN';
     private const FINISHED_DIR = 'finished';
     private const PRINT_DIR = 'print';
 
@@ -149,6 +150,14 @@ class JobFolders
     public function getJobCnFinishedDir(array $job, bool $autoCreate = true): string
     {
         return $this->place($job, self::CREDIT_NOTE . '/' . self::FINISHED_DIR, $autoCreate);
+    }
+
+    /**
+     * The ASN workbooks of "ใส่ยอด PDF ลง ASN", kept as the user uploaded them so the export patches the original
+     */
+    public function getJobCnFillDir(array $job, bool $autoCreate = true): string
+    {
+        return $this->place($job, self::CREDIT_NOTE . '/' . self::CN_FILL_DIR, $autoCreate);
     }
 
     public function getJobVbrpDir(array $job, bool $autoCreate = true): string

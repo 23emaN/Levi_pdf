@@ -306,7 +306,8 @@ html, body {
 #view-asn-section[data-step="compare"] .btn-step-compare,
 #view-pdf-section[data-step="extract"] .btn-step-extract,
 #credit-note-section[data-step="extract"] .btn-step-extract,
-#credit-note-asn-section[data-step="compare"] .btn-step-compare {
+#credit-note-asn-section[data-step="compare"] .btn-step-compare,
+#credit-note-fill-section[data-step="fill"] .btn-step-compare {
     --bs-btn-color: #ffffff;
     --bs-btn-bg: #2563eb;
     --bs-btn-border-color: #2563eb;
@@ -346,7 +347,8 @@ html, body {
 
 #view-asn-section[data-step="select"] .btn-step-select,
 #view-asn-section[data-step="vbrp"] .btn-step-vbrp,
-#credit-note-asn-section[data-step="select"] .btn-step-select {
+#credit-note-asn-section[data-step="select"] .btn-step-select,
+#credit-note-fill-section[data-step="select"] .btn-step-select {
     --bs-btn-color: #ffffff;
     --bs-btn-bg: #16a34a;
     --bs-btn-border-color: #16a34a;
@@ -498,7 +500,7 @@ html, body {
     font-weight: 500;
 }
 
-#view-pdf-section, #view-asn-section, #credit-note-section, #credit-note-asn-section, #vbrp-section {
+#view-pdf-section, #view-asn-section, #credit-note-section, #credit-note-asn-section, #credit-note-fill-section, #vbrp-section {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -1107,7 +1109,7 @@ table#jobs-table {
     border-left: 1px solid #cbd5e1;
 }
 
-table#detailed-table, table#asn-table, table#credit-note-table, table#credit-note-asn-table {
+table#detailed-table, table#asn-table, table#credit-note-table, table#credit-note-asn-table, table#credit-note-fill-table {
     table-layout: fixed;
     width: max-content;
     min-width: 100%;
@@ -2262,3 +2264,44 @@ td.verdict-cell {
 .cover-table {
     max-height: 60vh;
 }
+
+/* Tab 4 of credit_note.php: ใส่ยอด PDF ลง ASN (assets/js/credit-note/asn-fill.js) */
+.cn-fill-missing {
+    margin: 8px 12px 0;
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #991b1b;
+    align-items: flex-start;
+}
+
+.cn-fill-missing .fa-triangle-exclamation { margin-top: 3px; }
+
+.cn-fill-missing-list {
+    margin-top: 2px;
+    max-height: 3.2em;
+    overflow: hidden;
+    font-size: 0.78rem;
+    color: #b91c1c;
+}
+
+.cn-fill-sheet-list .list-group-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+}
+
+.cn-fill-sheet-list .list-group-item.is-disabled {
+    color: #94a3b8;
+    background: #f8fafc;
+}
+
+.cn-fill-sheet-list .cn-fill-sheet-meta {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+#credit-note-fill-table td.cn-fill-pdf { background: #fefce8; color: #b91c1c; font-weight: 600; }
+#credit-note-fill-table td.cn-fill-none { color: #b91c1c; }

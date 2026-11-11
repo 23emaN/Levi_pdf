@@ -383,7 +383,7 @@ async function executeConfirmedAsnImport() {
                 });
             }
 
-            const choice = await resolveAsnDuplicates(displayLabel, records, i + 1, pendingAsnFiles.length);
+            const choice = await resolveAsnDuplicates(displayLabel, records, i + 1, pendingAsnFiles.length, f.fileName);
             if (!choice) {
                 hideLoadingOverlay();
                 pendingAsnFiles = [];
@@ -610,7 +610,7 @@ async function importAsnSheetFromWorkbook(sheetName, keepOverlayOpen = false) {
             });
         }
 
-        const choice = await resolveAsnDuplicates(displayLabel, records, 1, 1);
+        const choice = await resolveAsnDuplicates(displayLabel, records, 1, 1, currentAsnFileName);
         if (!choice || choice.sameFileMode === 'skip') {
             hideLoadingOverlay();
             await checkExistingReconcile();
@@ -717,11 +717,19 @@ function askAsnSameFileMode(label, sameFile) {
     });
 }
 
+// The import label is `${fileName} [${sheetName}]`: an overlap that only other sheets of the same workbook hold is
+// expected when one file has several sheets, so it is not asked about
+function asnOverlapIsSameWorkbook(files, fileName) {
+    if (!fileName || !Array.isArray(files) || files.length === 0) return false;
+    const prefix = `${fileName} [`;
+    return files.every(source => String(source).startsWith(prefix));
+}
+
 /**
  * Asks what to do with data that is already in the Job.
  * Returns null when cancelled, otherwise { sameFileMode, duplicateMode, recompare }.
  */
-async function resolveAsnDuplicates(label, records, position, total) {
+async function resolveAsnDuplicates(label, records, position, total, fileName = '') {
     const fd = new FormData();
     fd.append('job_id', CURRENT_JOB_ID);
     fd.append('asn_filename', label);
@@ -750,7 +758,10 @@ async function resolveAsnDuplicates(label, records, position, total) {
         resume();
     }
 
-    if (json.overlap_count) {
+    if (json.overlap_count && asnOverlapIsSameWorkbook(json.files, fileName)) {
+        // The sheet just picked takes over the invoices the other sheets of this file hold, without asking
+        choice.duplicateMode = 'replace';
+    } else if (json.overlap_count) {
         hideLoadingOverlay();
         const duplicateMode = await askAsnDuplicateMode(json);
         if (!duplicateMode) {

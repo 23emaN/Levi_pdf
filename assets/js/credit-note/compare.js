@@ -69,7 +69,6 @@ function creditNoteCompareToolbar() {
     });
     const rows = Number(c.counts.rows || 0);
     document.getElementById('credit-note-asn-section').dataset.step = creditNoteCompareStep(rows, c.compared);
-    document.getElementById('credit-note-compare').disabled = rows === 0;
     document.getElementById('credit-note-asn-export').disabled = c.shown.length === 0;
 
     const label = creditNoteAsnLabel(c.label, c.counts);
@@ -266,7 +265,7 @@ function creditNoteAsnAskDuplicate(overlap) {
 
 // What to do with data the Job already holds; null when the user cancels, otherwise
 // { sameFileMode, duplicateMode, recompare } as import_asn takes them on the Tax Invoice page
-async function creditNoteAsnResolve(label, records, position, total) {
+async function creditNoteAsnResolve(label, records, position, total, fileName = '') {
     const overlap = await creditNoteApi('job_cn_asn_overlap', { job_id: CURRENT_JOB_ID, asn_filename: label, records: JSON.stringify(records) });
     const choice = { sameFileMode: 'replace', duplicateMode: 'skip', recompare: false };
     const resume = () => showLoadingOverlay('กำลังดึงข้อมูล ASN ลงตาราง...', `กำลังนำเข้าชีต ${position} / ${total}: ${label}`);
@@ -283,7 +282,10 @@ async function creditNoteAsnResolve(label, records, position, total) {
         choice.recompare = !!overlap.same_file.reconciled;
     }
 
-    if (overlap.overlap_count) {
+    if (overlap.overlap_count && creditNoteAsnOverlapIsSameWorkbook(overlap.files, fileName)) {
+        // The sheet just picked takes over the credit notes the other sheets of this file hold, without asking
+        choice.duplicateMode = 'replace';
+    } else if (overlap.overlap_count) {
         hideLoadingOverlay();
         const duplicateMode = await creditNoteAsnAskDuplicate(overlap);
         if (!duplicateMode) return null;
@@ -306,7 +308,7 @@ async function creditNoteAsnRunImport() {
             const sheet = creditNoteAsnSelected(files[i]);
             const label = creditNoteAsnSource(files[i].fileName, sheet.name);
             showLoadingOverlay('กำลังดึงข้อมูล ASN ลงตาราง...', `กำลังนำเข้าชีต ${i + 1} / ${files.length}: ${label}`);
-            const choice = await creditNoteAsnResolve(label, sheet.records, i + 1, files.length);
+            const choice = await creditNoteAsnResolve(label, sheet.records, i + 1, files.length, files[i].fileName);
             if (!choice) break;
             if (choice.sameFileMode === 'skip') continue;
             last = await creditNoteApi('job_cn_import_asn', {
@@ -483,7 +485,6 @@ function creditNoteCompareInit() {
     });
     document.getElementById('creditNoteAsnImportConfirm').addEventListener('click', creditNoteAsnRunImport);
     document.getElementById('credit-note-asn-sheet').addEventListener('change', e => creditNoteAsnImportAnotherSheet(e.target));
-    document.getElementById('credit-note-compare').addEventListener('click', creditNoteCompareOpen);
     document.getElementById('creditNoteCompareConfirm').addEventListener('click', creditNoteCompareRun);
     document.getElementById('credit-note-asn-export').addEventListener('click', () => creditNoteCompareExportExcel(creditNoteCompare.shown));
     document.getElementById('credit-note-asn-clear').addEventListener('click', creditNoteAsnClearOpen);

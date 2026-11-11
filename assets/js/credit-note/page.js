@@ -1,5 +1,5 @@
-// The three tabs of the page. leave() parks a table the user no longer sees, enter() draws what the tab shows; a tab is
-// remembered per Job and ?tab=asn|dashboard opens one directly, as on workspace.php.
+// The tabs of the page (the compare with the ASN, the old tab 2, is closed: no button opens it). leave() parks a table the user no longer sees, enter() draws what the tab shows; a tab is
+// remembered per Job and ?tab=fill|dashboard opens one directly, as on workspace.php.
 const CN_TABS = {
     pdf: {
         button: 'credit-note-tab-pdf', section: 'credit-note-section', label: '1. ดึงข้อมูลจากใบลดหนี้ (PDF)',
@@ -8,18 +8,15 @@ const CN_TABS = {
             if (creditNoteState.render.parked) creditNoteRenderTable();
         }
     },
-    asn: {
-        button: 'credit-note-tab-asn', section: 'credit-note-asn-section', label: '2. เปรียบเทียบกับไฟล์ ASN',
-        leave: () => creditNoteParkTable('credit-note-asn-tbody', creditNoteCompare.render),
-        enter: async () => {
-            if (creditNoteCompare.loading) await creditNoteCompare.loading.catch(() => {});
-            if (creditNoteCompare.render.parked) creditNoteCompareRender();
-        }
-    },
     dashboard: {
         button: 'credit-note-tab-dashboard', section: 'credit-note-dash-section', label: '3. ภาพรวม',
         leave: () => {},
         enter: () => creditNoteDashLoad()
+    },
+    fill: {
+        button: 'credit-note-tab-fill', section: 'credit-note-fill-section', label: '2. ใส่ยอด PDF ลง ASN',
+        leave: () => creditNoteParkTable('credit-note-fill-tbody', creditNoteFill.render),
+        enter: () => creditNoteFillEnter()
     }
 };
 
@@ -152,11 +149,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     initColumnResizers('#credit-note-table');
     creditNoteCompareInit();
+    creditNoteFillInit();
     creditNoteDashInit();
 
     runWithLoading('กำลังโหลดข้อมูลใบลดหนี้...', 'กรุณารอสักครู่ ระบบกำลังดึงข้อมูลจากฐานข้อมูล', () => Promise.all([
         creditNoteLoadDocs().catch(err => creditNoteLoadError('credit-note-tbody', CN_COLUMNS.length, err)),
         creditNoteCompareLoad().catch(err => creditNoteLoadError('credit-note-asn-tbody', CN_COMPARE_COLUMNS.length, err)),
-        creditNoteTabs.active === 'dashboard' ? creditNoteDashLoad() : null
+        creditNoteTabs.active === 'dashboard' ? creditNoteDashLoad() : null,
+        creditNoteTabs.active === 'fill' ? creditNoteFillEnter() : null
     ]));
 });

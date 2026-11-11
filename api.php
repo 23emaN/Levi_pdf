@@ -462,6 +462,45 @@ try {
             echo json_encode(['status' => 'success', 'data' => $compare->dashboard(intval($_GET['job_id'] ?? 0))], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             break;
 
+        // "ใส่ยอด PDF ลง ASN" (tab 4 of credit_note.php): the workbook comes as a file, its picked sheets as JSON
+        case 'job_cn_fill_import':
+            $fill = (new JobManager())->creditNoteFill();
+            $upload = $_FILES['file'] ?? [];
+            if (!$upload) {
+                throw new \RuntimeException('ไม่ได้รับไฟล์ ASN (ไฟล์อาจใหญ่เกิน post_max_size ' . ini_get('post_max_size') . ')');
+            }
+            $answer = $fill->import(
+                intval($_POST['job_id'] ?? 0),
+                (string)($upload['tmp_name'] ?? ''),
+                (string)($upload['name'] ?? ''),
+                (int)($upload['error'] ?? UPLOAD_ERR_NO_FILE),
+                array_values(array_filter((array)(json_decode($_POST['sheets'] ?? '[]', true) ?: []), 'is_array'))
+            );
+            echo json_encode(['status' => 'success'] + $answer, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            break;
+
+        case 'job_cn_fill_data':
+            $fill = (new JobManager())->creditNoteFill();
+            echo json_encode(['status' => 'success'] + $fill->data(intval($_GET['job_id'] ?? 0)), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            break;
+
+        case 'job_cn_fill_pdf':
+            $fill = (new JobManager())->creditNoteFill();
+            echo json_encode(['status' => 'success'] + $fill->fillFromPdf(intval($_POST['job_id'] ?? 0)), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            break;
+
+        // The overview tab (tab 3) of credit_note.php, built from the lines of tab 2
+        case 'job_cn_fill_overview':
+            $fill = (new JobManager())->creditNoteFill();
+            echo json_encode(['status' => 'success', 'data' => $fill->overview(intval($_GET['job_id'] ?? 0))], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            break;
+
+        case 'job_cn_fill_clear':
+            $fill = (new JobManager())->creditNoteFill();
+            $cleared = $fill->clear(intval($_POST['job_id'] ?? 0), (array)(json_decode($_POST['file_ids'] ?? '[]', true) ?: []));
+            echo json_encode(['status' => 'success'] + $cleared, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            break;
+
         // ================= VBRP ================= //
         case 'job_vbrp_upload':
             $jobManager = new JobManager();

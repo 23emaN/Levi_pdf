@@ -1,5 +1,23 @@
-// Tab 3: the overview of the credit notes of the ASN (job_cn_dashboard), adapted from workspace/dashboard.js.
-// The rows, sort, search and Excel need no DOM, so tests/credit_note_compare.js runs them in Node.
+// Tab 3: the overview of the credit notes of tab 2 "ใส่ยอด PDF ลง ASN" (job_cn_fill_overview), adapted from
+// workspace/dashboard.js. The rows, sort, search and Excel need no DOM.
+
+// What a credit note looks like here: found in a PDF, not found, or not read yet (CN_FILL_STATUS of asn-fill.js)
+const CN_DASH_STATUS = {
+    MISMATCH: { label: 'ไม่พบใน PDF', icon: 'fa-triangle-exclamation', tone: 'mismatch', rank: 0 },
+    PENDING: { label: 'ยังไม่อ่านยอด', icon: 'fa-clock', tone: 'waiting', rank: 1 },
+    MATCH: { label: 'พบใน PDF', icon: 'fa-check', tone: 'match', rank: 2 }
+};
+
+function creditNoteDashBadge(status) {
+    const s = CN_DASH_STATUS[status] || CN_DASH_STATUS.PENDING;
+    return `<span class="pill-badge status-${s.tone}"><i class="fa-solid ${s.icon} me-1"></i>${s.label}</span>`;
+}
+
+function creditNoteDashRemark(row) {
+    if (row.status === 'MISMATCH') return [{ part: 'problem', label: '', text: row.problem || CN_FILL_MISSING_TEXT, className: 'remark-mismatch' }];
+    if (row.status === 'PENDING') return [{ part: 'problem', label: '', text: 'ยังไม่ได้กดอ่านยอดจาก PDF', className: 'remark-waiting' }];
+    return [];
+}
 
 // rows: one per credit note number of the ASN, in the server's order (store, then number); token drops an answer
 // that a later refresh has overtaken
@@ -53,25 +71,27 @@ const CN_DASH_CELLS = {
     },
     amount: {
         value: r => creditNoteAmount(r.amount),
-        html: r => {
-            const basis = CN_AMOUNT_BASIS[r.amount_kind];
-            return `<td class="text-end tabular-num">${creditNoteMoneyHtml(creditNoteAmount(r.amount), '', basis && basis.asnName)}</td>`;
-        },
-        search: true,
-        excel: (r, n, col) => {
-            const basis = CN_AMOUNT_BASIS[r.amount_kind];
-            return { [col.label]: creditNoteAmount(r.amount), 'Amount Basis': basis ? basis.excel : null };
-        }
+        html: r => `<td class="text-end tabular-num">${creditNoteMoneyHtml(creditNoteAmount(r.amount), '')}</td>`,
+        search: true
+    },
+    pdf_cost: {
+        value: r => creditNoteAmount(r.pdf_cost),
+        html: r => `<td class="text-end tabular-num${r.pdf_cost === null ? '' : ' cn-fill-pdf'}">${creditNoteMoneyHtml(creditNoteAmount(r.pdf_cost), '')}</td>`,
+        search: true
+    },
+    pdf_vat: {
+        value: r => creditNoteAmount(r.pdf_vat),
+        html: r => `<td class="text-end tabular-num${r.pdf_vat === null ? '' : ' cn-fill-pdf'}">${creditNoteMoneyHtml(creditNoteAmount(r.pdf_vat), '')}</td>`
     },
     pages: {
         value: r => typeof r.pages === 'number' ? r.pages : creditNoteText(r.pages),
         html: r => `<td class="text-center tabular-num">${escapeHtml(CN_DASH_CELLS.pages.value(r)) || CN_NULL_CELL}</td>`
     },
     status: {
-        value: r => (CN_STATUS_DISPLAY[r.status] || CN_STATUS_DISPLAY.MISMATCH).rank,
-        html: r => `<td class="text-center">${creditNoteStatusBadge(r.status)}</td>`,
-        search: r => (CN_STATUS_DISPLAY[r.status] || { label: '' }).label,
-        excel: (r, n, col) => ({ [col.label]: (CN_STATUS_DISPLAY[r.status] || { label: r.status }).label })
+        value: r => (CN_DASH_STATUS[r.status] || CN_DASH_STATUS.PENDING).rank,
+        html: r => `<td class="text-center">${creditNoteDashBadge(r.status)}</td>`,
+        search: r => (CN_DASH_STATUS[r.status] || { label: '' }).label,
+        excel: (r, n, col) => ({ [col.label]: (CN_DASH_STATUS[r.status] || { label: r.status }).label })
     },
     remark: {
         value: r => creditNoteRemarkText(r._remark) || null,
@@ -83,7 +103,7 @@ const CN_DASH_CELLS = {
 
 function creditNoteDashPrepare(row, order) {
     row._order = order;
-    row._remark = creditNoteRemarkLines(row.status, row.problem, false);
+    row._remark = creditNoteDashRemark(row);
     row._search = CN_DASH_COLUMNS.map(col => {
         const cell = CN_DASH_CELLS[col.key];
         if (!cell.search) return '';
@@ -115,7 +135,7 @@ function creditNoteDashExcelRows(rows) {
 async function creditNoteDashExportExcel(rows) {
     if (!rows || rows.length === 0) return;
     const sheetRows = creditNoteDashExcelRows(rows);
-    await creditNoteWriteExcel(sheetRows, Object.keys(sheetRows[0]), ['Amount'], 'Credit_Note_Summary',
+    await creditNoteWriteExcel(sheetRows, Object.keys(sheetRows[0]), CN_DASH_COLUMNS.filter(col => col.type === 'currency').map(col => col.label), 'Credit_Note_Summary',
         `Job_${CURRENT_JOB_ID}_${CN_JOB_NAME_CLEAN}_Credit_Note_Summary.xlsx`);
 }
 
@@ -128,7 +148,7 @@ async function creditNoteDashLoad() {
     const token = ++creditNoteDash.token;
     creditNoteDashSetLoading(true);
     try {
-        const json = await creditNoteApi('job_cn_dashboard');
+        const json = await creditNoteApi('job_cn_fill_overview');
         if (token === creditNoteDash.token) creditNoteDashRender(json.data);
     } catch (err) {
         if (token === creditNoteDash.token) creditNoteDashRender(null, err.message);
@@ -164,12 +184,11 @@ function creditNoteDashSetState(kind, text, iconClass) {
     state.appendChild(document.createTextNode(text));
 }
 
-// Complete and wrong are known only after a compare; before it every credit note of the ASN waits for one
+// complete: found in a PDF, error: not found, pending: the PDF was not read for it yet
 function creditNoteDashRender(data, errorMessage) {
-    const known = !!data && !!data.compared;
     const total = data ? Number(data.total || 0) : 0;
-    const parts = data ? { complete: known ? data.complete : 0, pending: data.pending, error: known ? data.error : 0 } : {};
-    const shown = { total: data ? total : null, complete: known ? data.complete : null, pending: data ? data.pending : null, error: known ? data.error : null };
+    const parts = data ? { complete: data.complete, pending: data.pending, error: data.error } : {};
+    const shown = { total: data ? total : null, complete: data ? data.complete : null, pending: data ? data.pending : null, error: data ? data.error : null };
     Object.keys(shown).forEach(field => {
         const value = shown[field];
         document.getElementById(`credit-note-dash-${field}`).textContent = value === null || value === undefined ? '–' : Number(value).toLocaleString();
@@ -186,12 +205,14 @@ function creditNoteDashRender(data, errorMessage) {
         message = errorMessage;
     } else if (total === 0) {
         creditNoteDashSetState('muted', 'ยังไม่มีข้อมูล ASN', 'fa-circle-minus');
-        message = 'ยังไม่มีข้อมูล ASN ใน Job นี้ นำเข้าไฟล์ ASN ที่หน้าเปรียบเทียบก่อน';
-    } else if (!known) {
-        creditNoteDashSetState('warn', 'ยังไม่ได้เทียบกับ PDF', 'fa-clock');
-        message = 'ยังไม่ได้เทียบกับ PDF ทุกใบลดหนี้จึงรอเทียบ ตัวเลขสมบูรณ์และผิดพลาดจะขึ้นหลังกดเทียบกับ PDF';
+        message = 'ยังไม่มีข้อมูล ASN ใน Job นี้ ไปที่แท็บ "2. ใส่ยอด PDF ลง ASN" แล้วนำเข้าไฟล์ ASN';
+    } else if (data.pending > 0) {
+        creditNoteDashSetState('warn', 'ยังไม่อ่านยอดจาก PDF', 'fa-clock');
+        message = `ใบลดหนี้ ${Number(data.pending).toLocaleString()} ใบยังไม่ได้อ่านยอด ไปที่แท็บ "2. ใส่ยอด PDF ลง ASN" แล้วกด "อ่านยอดจาก PDF"`;
+    } else if (data.error > 0) {
+        creditNoteDashSetState('error', `ไม่พบใน PDF ${Number(data.error).toLocaleString()} ใบ`, 'fa-triangle-exclamation');
     } else {
-        creditNoteDashSetState('ok', 'เทียบกับ PDF แล้ว', 'fa-circle-check');
+        creditNoteDashSetState('ok', 'อ่านยอดจาก PDF ครบทุกใบ', 'fa-circle-check');
     }
     const notice = document.getElementById('credit-note-dash-notice');
     document.getElementById('credit-note-dash-notice-text').textContent = message;
@@ -234,7 +255,7 @@ function creditNoteDashRenderTable() {
 
 function creditNoteDashInit() {
     document.getElementById('credit-note-dash-refresh').addEventListener('click', creditNoteDashLoad);
-    document.getElementById('credit-note-dash-notice-action').addEventListener('click', () => creditNoteSwitchTab('asn'));
+    document.getElementById('credit-note-dash-notice-action').addEventListener('click', () => creditNoteSwitchTab('fill'));
     document.getElementById('credit-note-dash-export').addEventListener('click', () =>
         creditNoteDashExportExcel(creditNoteDashVisibleRows(creditNoteDash.rows, creditNoteDash.status, creditNoteDash.query, creditNoteDash.sort)));
     document.querySelectorAll('#credit-note-dash-filters .recon-filter-btn').forEach(btn => {

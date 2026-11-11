@@ -7,7 +7,7 @@
 const CN_STATUS_DISPLAY = {
     MISMATCH: { label: 'ผิดพลาด', icon: 'fa-triangle-exclamation', tone: 'mismatch', rank: 0 },
     MATCH: { label: 'สมบูรณ์', icon: 'fa-check', tone: 'match', rank: 1 },
-    PENDING: { label: 'รอเทียบกับ PDF', icon: 'fa-clock', tone: 'waiting', rank: 2 }
+    PENDING: { label: 'รอใส่ยอด PDF', icon: 'fa-clock', tone: 'waiting', rank: 2 }
 };
 
 const CN_REMARK_LABELS = { problem: 'ปัญหา : ', solution: 'วิธีแก้ไข : ' };
@@ -19,8 +19,8 @@ const CN_REMARKS = {
     MATCH: () => ({ labelled: false, problem: 'ข้อมูลถูกต้อง' }),
     PENDING: (problem, withSolution) => ({
         labelled: true,
-        problem: 'รอการเปรียบเทียบกับ PDF',
-        solution: withSolution ? 'กดปุ่ม "เทียบกับ PDF" ด้านบนเพื่อเริ่มเปรียบเทียบ' : ''
+        problem: 'ยังไม่ได้ใส่ยอดจาก PDF ลงไฟล์ ASN',
+        solution: withSolution ? 'ไปที่แท็บ "2. ใส่ยอด PDF ลง ASN" นำเข้าไฟล์ ASN แล้วกด "อ่านยอดจาก PDF"' : ''
     })
 };
 

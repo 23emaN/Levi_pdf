@@ -270,7 +270,7 @@ function tableHead(string $html, string $tableId): array
 $cnTables = [
     'credit-note-table' => ['#', 'File Name', 'Pages', 'Credit Note No.', 'Date', 'Customer', 'Type', 'Original Amt', 'Corrected Amt', 'Difference', 'VAT', 'Amount', 'Amt Excl VAT', 'VAT (7%)', 'Amt Incl VAT'],
     'credit-note-asn-table' => ['#', 'Status', 'Credit Note No.', 'Source File', 'Barcode / EAN', 'Description', 'Store (PDF)', 'Store (ASN)', 'Qty (PDF)', 'Qty (ASN)', 'Amount (PDF)', 'Amount (ASN)', 'VAT (PDF / ASN)', 'Remark'],
-    'credit-note-dash-table' => ['#', 'Dest Store No.', 'Credit Note No.', 'Source File', 'Total Qty', 'Amount', 'Pages', 'Status', 'Remark'],
+    'credit-note-dash-table' => ['#', 'Dest Store No.', 'Credit Note No.', 'PDF File', 'Qty (ASN)', 'Cost Ex VAT (ASN)', 'PDF_TOTAL_COST_EX_VAT', 'PDF_TOTAL_VAT', 'Pages', 'Status', 'Remark'],
 ];
 $headers = tableHead($cnPage, 'credit-note-table')['labels'];
 $headFaults = [];
@@ -337,15 +337,17 @@ $sectionShown = function (string $html, string $id): ?string {
 $tabsOf = $tabs($cnPage);
 $asnTabPage = page('credit_note.php', ['job_id' => $jobId, 'tab' => 'asn']);
 $dashTabPage = page('credit_note.php', ['job_id' => $jobId, 'tab' => 'dashboard']);
+$fillTabPage = page('credit_note.php', ['job_id' => $jobId, 'tab' => 'fill']);
 check(
-    'the credit note page leads back to the portal of its Job and has three tabs in order, the first open, and ?tab=asn or ?tab=dashboard opens that tab',
+    'the credit note page leads back to the portal of its Job and has three tabs in order, the first open: the compare with the ASN is closed (?tab=asn opens tab 1 and its section stays hidden), ?tab=fill or ?tab=dashboard opens that tab',
     preg_match('/<div class="app-brand">\s*<a href="job.php\?job_id=' . $jobId . '"/', $cnPage) === 1
-        && substr_count($cnPage, 'class="header-tab-btn') === 3
-        && array_column($tabsOf, 'label') === ['1. ดึงข้อมูลจากใบลดหนี้ (PDF)', '2. เปรียบเทียบกับไฟล์ ASN', '3. ภาพรวม']
-        && array_column($tabsOf, 'tab') === ['pdf', 'asn', 'dashboard'] && array_column($tabsOf, 'active') === [true, false, false]
-        && [$sectionShown($cnPage, 'credit-note-section'), $sectionShown($cnPage, 'credit-note-asn-section'), $sectionShown($cnPage, 'credit-note-dash-section')] === ['flex', 'none', 'none']
-        && array_column($tabs($asnTabPage), 'active') === [false, true, false] && $sectionShown($asnTabPage, 'credit-note-asn-section') === 'flex'
+        && substr_count($cnPage, 'class="header-tab-btn') === 3 && strpos($cnPage, 'id="credit-note-tab-asn"') === false
+        && array_column($tabsOf, 'label') === ['1. ดึงข้อมูลจากใบลดหนี้ (PDF)', '2. ใส่ยอด PDF ลง ASN', '3. ภาพรวม']
+        && array_column($tabsOf, 'tab') === ['pdf', 'fill', 'dashboard'] && array_column($tabsOf, 'active') === [true, false, false]
+        && [$sectionShown($cnPage, 'credit-note-section'), $sectionShown($cnPage, 'credit-note-asn-section'), $sectionShown($cnPage, 'credit-note-dash-section'), $sectionShown($cnPage, 'credit-note-fill-section')] === ['flex', 'none', 'none', 'none']
+        && array_column($tabs($asnTabPage), 'active') === [true, false, false] && $sectionShown($asnTabPage, 'credit-note-asn-section') === 'none' && $sectionShown($asnTabPage, 'credit-note-section') === 'flex'
         && array_column($tabs($dashTabPage), 'active') === [false, false, true] && $sectionShown($dashTabPage, 'credit-note-dash-section') === 'flex'
+        && array_column($tabs($fillTabPage), 'active') === [false, true, false] && $sectionShown($fillTabPage, 'credit-note-fill-section') === 'flex'
         && $sectionShown($dashTabPage, 'credit-note-section') === 'none',
     json_encode($tabsOf, JSON_UNESCAPED_UNICODE)
 );
@@ -361,12 +363,13 @@ $placeholders = function (string $html, string $tbodyId): int {
     return substr_count($m[1] ?? '', 'class="placeholder-grid-row"');
 };
 check(
-    'an empty documents table and an empty compare grid show the blank grid rows of the other pages; a Job with documents and ASN rows shows none and opens tab 2 on the compare step',
+    'an empty documents table and an empty compare grid show the blank grid rows of the other pages; a Job with documents and ASN rows shows none and opens tab 2 on the compare step; tab 2 has neither the compare nor the fill button (tab 4 fills, its read button waits for an import)',
     $placeholders($freshCn, 'credit-note-tbody') === 18 && $placeholders($freshCn, 'credit-note-asn-tbody') === 18
         && $placeholders($cnPage, 'credit-note-tbody') === 0 && $placeholders($cnPage, 'credit-note-asn-tbody') === 0
         && strpos($cnPage, 'id="credit-note-asn-section" data-step="compare"') !== false
         && strpos($freshCn, 'id="credit-note-asn-section" data-step="select"') !== false
-        && preg_match('/<button[^>]*id="credit-note-compare" type="button" disabled>/', $freshCn) === 1
+        && strpos($freshCn, 'id="credit-note-compare"') === false && strpos($freshCn, 'id="credit-note-asn-fill"') === false
+        && preg_match('/<button[^>]*btn-step-compare" id="credit-note-fill-read" type="button" disabled/', $freshCn) === 1
 );
 $finishedText = 'myfile/Portal _A&amp;B/CREDIT NOTE/finished/';
 check(
@@ -665,10 +668,10 @@ if ($cmp === null) {
     $pending = $cmp['pending'] ?? [];
     $pendingTexts = array_map($texts, $pending['rows'] ?? []);
     check(
-        'imported ASN lines wait as รอเทียบกับ PDF with what to do, and show the credit note amount on its basis: the first positive Total Cost Ex VAT of a cost sheet, the sum of quantity x Unit Ret of a retail sheet',
+        'imported ASN lines wait as รอใส่ยอด PDF with what to do, and show the credit note amount on its basis: the first positive Total Cost Ex VAT of a cost sheet, the sum of quantity x Unit Ret of a retail sheet',
         ($pending['statuses'] ?? null) === array_fill(0, 7, 'PENDING')
             && ($pending['docAmounts'] ?? null) === [4390.01, 4390.01, 6271.4, 6271.4, 99.5, 250, 250]
-            && array_slice($pendingTexts[0] ?? [], 11) === ['4,390.01', '–', 'ปัญหา : รอการเปรียบเทียบกับ PDFวิธีแก้ไข : กดปุ่ม "เทียบกับ PDF" ด้านบนเพื่อเริ่มเปรียบเทียบ']
+            && array_slice($pendingTexts[0] ?? [], 11) === ['4,390.01', '–', 'ปัญหา : ยังไม่ได้ใส่ยอดจาก PDF ลงไฟล์ ASNวิธีแก้ไข : ไปที่แท็บ "2. ใส่ยอด PDF ลง ASN" นำเข้าไฟล์ ASN แล้วกด "อ่านยอดจาก PDF"']
             && array_slice($pendingTexts[1] ?? [], 11, 2) === ['6,271.40', '– / 438.99'],
         json_encode([$pending['docAmounts'] ?? null, $pendingTexts], JSON_UNESCAPED_UNICODE)
     );
@@ -690,8 +693,8 @@ if ($cmp === null) {
         'remarks follow the Tax Invoice rules: a wrong line is one red ปัญหา line with its problems joined by commas, a complete line says ข้อมูลถูกต้อง, a waiting line names what to do except in the overview',
         $remarkView($remarks['mismatch'] ?? []) === ['ปัญหา : จำนวนไม่ตรง (PDF: 2 ชิ้น / ASN: 3 ชิ้น), ยอดรวมไม่ตรง (PDF: 11.00 / ASN: 10.00) [remark-mismatch]']
             && $remarkView($remarks['match'] ?? []) === ['ข้อมูลถูกต้อง [remark-match]']
-            && $remarkView($remarks['pendingCompare'] ?? []) === ['ปัญหา : รอการเปรียบเทียบกับ PDF [remark-waiting]', 'วิธีแก้ไข : กดปุ่ม "เทียบกับ PDF" ด้านบนเพื่อเริ่มเปรียบเทียบ [remark-waiting]']
-            && $remarkView($remarks['pendingOverview'] ?? []) === ['ปัญหา : รอการเปรียบเทียบกับ PDF [remark-waiting]'],
+            && $remarkView($remarks['pendingCompare'] ?? []) === ['ปัญหา : ยังไม่ได้ใส่ยอดจาก PDF ลงไฟล์ ASN [remark-waiting]', 'วิธีแก้ไข : ไปที่แท็บ "2. ใส่ยอด PDF ลง ASN" นำเข้าไฟล์ ASN แล้วกด "อ่านยอดจาก PDF" [remark-waiting]']
+            && $remarkView($remarks['pendingOverview'] ?? []) === ['ปัญหา : ยังไม่ได้ใส่ยอดจาก PDF ลงไฟล์ ASN [remark-waiting]'],
         json_encode($remarks, JSON_UNESCAPED_UNICODE)
     );
     check(

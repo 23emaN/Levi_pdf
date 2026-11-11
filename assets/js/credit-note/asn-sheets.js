@@ -131,3 +131,11 @@ function creditNoteSheetOptionText(sheet) {
 function creditNoteAsnSource(fileName, sheetName) {
     return `${fileName} / ${sheetName}`;
 }
+
+// An overlap that only other sheets of the same workbook hold is expected when one file has several sheets, so it is
+// not asked about
+function creditNoteAsnOverlapIsSameWorkbook(files, fileName) {
+    if (!fileName || !Array.isArray(files) || files.length === 0) return false;
+    const prefix = creditNoteAsnSource(fileName, '');
+    return files.every(source => String(source).startsWith(prefix));
+}

@@ -12,7 +12,7 @@ use PDOException;
 class Database
 {
     /** PRAGMA user_version of a database that has every table and column below */
-    public const SCHEMA_VERSION = 9;
+    public const SCHEMA_VERSION = 10;
 
     /** What CreditNoteReader adds to a credit note document (schema 9); NULL on documents stored before */
     private const CN_READER_COLUMNS = [
@@ -366,6 +366,50 @@ class Database
                 FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
             );
             CREATE INDEX IF NOT EXISTS idx_cn_asn_job_invoice ON job_cn_asn_records(job_id, invoice_no);
+        ");
+
+        // 9. "ใส่ยอด PDF ลง ASN" (schema 10): the ASN workbooks kept as uploaded, the sheets picked from them with their
+        // header row and every column, and one row per ASN line with the PDF totals read for it (CreditNoteAsnFill)
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS job_cn_fill_files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                file_name TEXT NOT NULL,
+                stored_name TEXT NOT NULL,
+                file_size INTEGER DEFAULT 0,
+                imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                filled_at DATETIME DEFAULT NULL,
+                UNIQUE(job_id, file_name),
+                FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS job_cn_fill_sheets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                file_id INTEGER NOT NULL,
+                sheet_name TEXT NOT NULL,
+                header_row INTEGER NOT NULL,
+                last_col INTEGER NOT NULL,
+                headers_json TEXT NOT NULL,
+                FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+                FOREIGN KEY (file_id) REFERENCES job_cn_fill_files(id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS job_cn_fill_rows (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                sheet_id INTEGER NOT NULL,
+                row_no INTEGER NOT NULL,
+                doc_no TEXT NOT NULL,
+                doc_key TEXT NOT NULL,
+                barcode TEXT NOT NULL,
+                values_json TEXT NOT NULL,
+                pdf_status TEXT NOT NULL DEFAULT '',
+                pdf_cost REAL DEFAULT NULL,
+                pdf_vat REAL DEFAULT NULL,
+                pdf_file TEXT DEFAULT NULL,
+                FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+                FOREIGN KEY (sheet_id) REFERENCES job_cn_fill_sheets(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_cn_fill_rows_job ON job_cn_fill_rows(job_id, doc_key);
         ");
 
         $pdo->exec("

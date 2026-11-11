@@ -72,6 +72,7 @@ $suites = [
     ['credit_note_test.php', quote($php) . ' ' . quote($tests . '/credit_note_test.php'), null],
     ['credit_note_reader_test.php', quote($php) . ' ' . quote($tests . '/credit_note_reader_test.php'), null],
     ['credit_note_compare_test.php', quote($php) . ' ' . quote($tests . '/credit_note_compare_test.php'), null],
+    ['credit_note_fill_test.php', quote($php) . ' ' . quote($tests . '/credit_note_fill_test.php'), null],
     ['portal_test.php', quote($php) . ' ' . quote($tests . '/portal_test.php'), null],
     ['vbrp_test.php', quote($php) . ' ' . quote($tests . '/vbrp_test.php'), null],
     ['vbrp_compare_test.php', quote($php) . ' ' . quote($tests . '/vbrp_compare_test.php'), null],

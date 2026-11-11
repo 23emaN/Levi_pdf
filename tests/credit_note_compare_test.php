@@ -532,8 +532,8 @@ Database::migrateSchema($v8);
 $tablesV9 = $v8->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'job_cn_%' ORDER BY name")->fetchAll(PDO::FETCH_COLUMN);
 $oldDoc = $v8->query('SELECT doc_no, amount, vat_amount, store_no, excl_vat, read_ok, read_note FROM job_cn_docs')->fetchAll(PDO::FETCH_ASSOC);
 check(
-    'a version 8 database moves to version 9: its Jobs and credit note documents stay, the reader\'s columns are added empty and the item, ASN and state tables exist',
-    (int)$v8->query('PRAGMA user_version')->fetchColumn() === 9 && $tablesV9 === ['job_cn_asn_records', 'job_cn_docs', 'job_cn_files', 'job_cn_items', 'job_cn_state']
+    'a version 8 database moves to version 10: its Jobs and credit note documents stay, the reader\'s columns are added empty and the item, ASN, state and fill tables exist',
+    (int)$v8->query('PRAGMA user_version')->fetchColumn() === 10 && $tablesV9 === ['job_cn_asn_records', 'job_cn_docs', 'job_cn_files', 'job_cn_fill_files', 'job_cn_fill_rows', 'job_cn_fill_sheets', 'job_cn_items', 'job_cn_state']
         && $oldDoc == [['doc_no' => '93251044-1', 'amount' => 1261.44, 'vat_amount' => 82.53, 'store_no' => null, 'excl_vat' => null, 'read_ok' => null, 'read_note' => null]]
         && (int)$v8->query('SELECT COUNT(*) FROM jobs')->fetchColumn() === 1,
     show([$tablesV9, $oldDoc])
